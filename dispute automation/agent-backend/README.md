@@ -17,18 +17,17 @@ Environment:
   Both are connected with `sslmode=verify-full` whatever the URL says (local hosts excepted).
 - `OPENAI_API_KEY`, optional `OPENAI_MODEL` (default `gpt-4.1-mini`; must accept images).
 - `ALLOWED_EXTENSION_ORIGINS` comma-separated `chrome-extension://<id>` origins.
-- Optional: `RATE_REQUESTS_PER_MIN` (240), `RATE_INVESTIGATIONS_PER_10MIN` (60), `IMAGE_RETENTION_DAYS` (30). Four investigations run at a time per instance.
+- Optional: `RATE_REQUESTS_PER_MIN` (240), `RATE_INVESTIGATIONS_PER_10MIN` (60), `IMAGE_RETENTION_DAYS` (30), `IMAGE_BUDGET_MB` (200),
+  `RUN_TIMEOUT_MS` (110000, hard limit on one agent turn), `TENANT_ID` (`korefi-internal-poc`, must match existing rows).
+  Four investigations run at a time per instance. Run a single instance: one-answer-at-a-time and drain are per process.
 
-## Database setup for chats (automatic)
+## Database changes
 
-When the service starts it checks for the five conversation tables and, if any are missing, creates them with its own role by
-running `../db/migrations/001_conversations.sql`. The SQL only creates new tables (so the role owns them and needs no grants)
-and never alters, or links by foreign key to, your existing tables. It is safe to run again.
-
-If that role is not allowed to create tables, the service logs `conversation_migration_failed`, answers chat requests with
-a plain 503 ("Chats are not set up in the database yet"), reports `conversations: "missing"` on `/readyz`, retries about once a
-minute, and keeps the older `/v1/investigations` flow working. Only then does anyone need to run the SQL by hand as an admin
-and grant the backend role access to the five new tables.
+The service connects with a deliberately limited role (read/write on `dispute_automation`, no `CREATE`) and never changes the
+schema. Chats need the tables from `../db/migrations/001_conversations.sql`, applied once by an owner with `npm run migrate`
+(see `../db/README.md`). If they are missing the service stays up: chat routes answer 503 ("Chats are not available right now"),
+`/readyz` reports `conversations: "missing"`, the older `/v1/investigations` flow keeps working, and the service looks again every
+30 seconds, so applying the migration needs no restart.
 
 ## API
 
@@ -45,6 +44,10 @@ All routes except `/healthz` need `Authorization: Bearer <token>`.
 - `POST /v1/disputes/confirm` also accepts `conversation_id`: the chat is marked disputed and a note is added to it.
 
 Completed runs include `suggested_followups` (from the agent, with sensible defaults).
+
+`POST /v1/conversations` and `POST /v1/conversations/:id/messages` honour an `Idempotency-Key` header: a retry with the same key gets the first answer back and does the work once (kept 15 minutes). Both report `images_dropped` when the image budget is full; the chat carries on from text.
+
+Failures are plain: database trouble is a 503 with `Retry-After`, a run that exceeds `RUN_TIMEOUT_MS` is a failed run with a safe message, and a run lost to a restart is reported as failed rather than polled forever. On a deploy (`SIGTERM`) the service stops accepting connections and waits up to 25 seconds for answers in flight.
 
 ### Single investigations (older, stateless)
 
@@ -64,5 +67,7 @@ adjustment is not proof of a won dispute.
 
 ## Tests
 
-`npm test` runs without a database, an OpenAI key or the network. The HTTP flow runs against an in-memory store with the same methods as the Neon one, and the real agent code (prompts, tools, saving and resuming a conversation) runs against a fake model.
+`npm test` runs without a database, an OpenAI key or the network: the HTTP flow runs against an in-memory store with the same methods as the Neon one, and the real agent code (prompts, tools, saving and resuming a conversation) runs against a fake model.
+
+`npm run test:integration` runs the whole service against a real Postgres as the real least-privilege roles (see `../db/README.md`): real uuid keys, tenant-scoped foreign keys, image bytes round-tripped through `bytea`, atomic filing, the real `doordash` history queries, and a proof that the role cannot change the schema. Point it at a Neon branch, never production. It found two bugs the in-memory tests could not (a stale-read race that reported finished answers as failed, and an arbitrary ordering in the similar-cases query).
 The SQL itself is only exercised against real Neon; see `../db/schema.inferred.sql`.

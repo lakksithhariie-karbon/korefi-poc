@@ -1,8 +1,10 @@
 // An in-memory stand-in with the same methods as createPgStore, so the HTTP flow can be tested without Neon.
+import { randomUUID } from 'node:crypto';
 import { UNRESOLVED_STORE } from '../src/constants.mjs';
 
 export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
-  let seq = 1;
+  let seq = 1; // ordering only; ids are uuids, like the real database
+  const uid = () => randomUUID();
   const cases = [];
   const investigations = [];
   const submissions = [];
@@ -35,7 +37,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     async upsertCase(tenant, operator, p) {
       let c = cases.find((x) => x.tenant === tenant && x.platform_store_id === p.storeId && x.platform_order_id === p.orderId);
       if (!c) {
-        c = { id: seq++, tenant, platform_store_id: p.storeId, platform_order_id: p.orderId, status: 'new' };
+        c = { id: uid(), tenant, platform_store_id: p.storeId, platform_order_id: p.orderId, status: 'new' };
         cases.push(c);
       }
       Object.assign(c, {
@@ -58,18 +60,21 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     },
     async setCaseStatus(id, status) {
       const c = cases.find((x) => x.id === id);
-      if (c && c.status !== 'submitted') c.status = status;
+      if (c && !['submitted', 'closed'].includes(c.status)) c.status = status;
     },
-    async recordEvent(caseId, actor, type, details) {
-      events.push({ caseId, actor, type, details });
+    async recordEvent(caseId, actorType, actorId, type, details = {}) {
+      events.push({ caseId, actorType, actorId, type, details });
     },
-    async createInvestigation(caseId, model, conversationId = null) {
-      const i = { id: seq++, case_id: caseId, status: 'running', model_id: model, error_summary: null, conversation_id: conversationId };
+    async createInvestigation(caseId, model, conversationId = null, promptVersion = null) {
+      const i = { id: uid(), case_id: caseId, status: 'running', model_id: model, error_summary: null, conversation_id: conversationId, prompt_version: promptVersion };
       investigations.push(i);
       return i.id;
     },
     async completeInvestigation(id, r) {
-      Object.assign(investigations.find((i) => i.id === id), { status: 'completed', ...r });
+      const i = investigations.find((x) => x.id === id);
+      if (!i || i.status !== 'running') return false;
+      Object.assign(i, { status: 'completed', ...r });
+      return true;
     },
     async failInvestigation(id, message) {
       const i = investigations.find((x) => x.id === id);
@@ -89,14 +94,14 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
       };
     },
     async startToolCall(investigationId, name) {
-      toolCalls.push({ id: seq++, investigationId, name });
+      toolCalls.push({ id: uid(), investigationId, name });
       return toolCalls.at(-1).id;
     },
     async finishToolCall() {},
     async recordSubmission(tenant, caseId, key, actor, disputeText, submittedAt) {
       const existing = submissions.find((s) => s.tenant === tenant && s.key === key);
       if (existing) return { id: existing.id, submitted_at: existing.submittedAt, already_recorded: true };
-      const s = { id: seq++, tenant, caseId, key, actor, disputeText, submittedAt };
+      const s = { id: uid(), tenant, caseId, key, actor, disputeText, submittedAt };
       submissions.push(s);
       const c = cases.find((x) => x.id === caseId);
       if (c) c.status = 'submitted';
@@ -108,7 +113,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
       return c && { id: c.id, platform_store_id: c.platform_store_id, platform_order_id: c.platform_order_id, order_url: c.order_url, issue_category: c.issue_category, issue_description: c.issue_description, error_amount: c.amount, structured_facts: c.structured_facts, redacted_page_text: c.redacted_page_text };
     },
     async createConversation(tenant, caseId, operator, title) {
-      const v = { id: seq++, tenant, case_id: caseId, title, created_by: operator, status: 'open', last_recommendation: null, created_at: new Date(), updated_at: new Date() };
+      const v = { id: uid(), tenant, case_id: caseId, title, created_by: operator, status: 'open', last_recommendation: null, created_at: new Date(Date.now() + seq++), updated_at: new Date(Date.now() + seq++) };
       conversations.push(v);
       return v.id;
     },
@@ -120,7 +125,8 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     async listConversations(tenant, limit = 50) {
       return conversations
         .filter((v) => v.tenant === tenant)
-        .sort((a, b) => b.updated_at - a.updated_at || b.id - a.id)
+        .filter((v) => v.status !== 'archived')
+        .sort((a, b) => b.updated_at - a.updated_at || b.created_at - a.created_at)
         .slice(0, limit)
         .map((v) => {
           const c = cases.find((x) => x.id === v.case_id);
@@ -133,10 +139,10 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
       if (patch.title) v.title = patch.title;
       if (patch.status) v.status = patch.status;
       if (patch.lastRecommendation) v.last_recommendation = patch.lastRecommendation;
-      v.updated_at = new Date(Date.now() + seq); // strictly increasing so ordering is deterministic
+      v.updated_at = new Date(Date.now() + seq++); // strictly increasing so ordering is deterministic
     },
     async appendMessage(conversationId, role, text, result = null, investigationId = null) {
-      const m = { id: seq++, conversation_id: conversationId, role, text, result, investigation_id: investigationId, created_at: new Date() };
+      const m = { id: uid(), seq: seq++, conversation_id: conversationId, role, text, result, investigation_id: investigationId, created_at: new Date() };
       messages.push(m);
       return m.id;
     },
@@ -152,12 +158,15 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     async saveTranscript(conversationId, msgs) {
       states.set(conversationId, JSON.parse(JSON.stringify(msgs)));
     },
+    async imageBytesUsed() {
+      return images.reduce((n, i) => n + i.bytes.length, 0);
+    },
     async countImages(conversationId) {
       return images.filter((i) => i.conversation_id === conversationId).length;
     },
     async saveImages(conversationId, caseId, list, expiresAt) {
       return list.map((img) => {
-        const row = { id: seq++, conversation_id: conversationId, case_id: caseId, mime: img.mime, bytes: img.bytes, expires_at: expiresAt, created_at: new Date() };
+        const row = { id: uid(), seq: seq++, conversation_id: conversationId, case_id: caseId, mime: img.mime, bytes: img.bytes, expires_at: expiresAt, created_at: new Date() };
         images.push(row);
         return row.id;
       });

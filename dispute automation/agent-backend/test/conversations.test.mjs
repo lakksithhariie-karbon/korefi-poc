@@ -167,7 +167,7 @@ test('a failed run leaves a note in the chat and does not corrupt the saved conv
     assert.equal(last.role, 'system');
     assert.match(last.text, /could not answer/);
     assert.ok(!/hunter2/.test(last.text));
-    assert.equal(s.store.states.get(Number(c.conversation_id)).length, 2, 'the transcript still holds only the successful exchange');
+    assert.equal(s.store.states.get(c.conversation_id).length, 2, 'the transcript still holds only the successful exchange');
     assert.equal((await s.call('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'three' })).status, 202);
   } finally {
     s.close();
@@ -254,6 +254,27 @@ test('images are deleted after their retention period', async () => {
     await new Promise((r) => setTimeout(r, 20));
     stop();
     assert.equal(s.store.images.length, 0);
+  } finally {
+    s.close();
+  }
+});
+
+test('a run that finishes between the poll reading it and checking it is not reported as lost', async () => {
+  const s = await start();
+  try {
+    const c = await open(s);
+    const m = await s.json('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'hello' });
+    await s.finish(m.investigation_id); // completed for real
+    // Make the first read return what a slow database could: the row as it was before completion, with the run already gone.
+    const real = s.store.getInvestigation.bind(s.store);
+    let reads = 0;
+    s.store.getInvestigation = async (...args) => {
+      const row = await real(...args);
+      return reads++ === 0 ? { ...row, status: 'running' } : row;
+    };
+    const polled = await s.json('GET', `/v1/investigations/${m.investigation_id}`);
+    assert.equal(polled.status, 'completed');
+    assert.equal(reads, 2, 'it looked again before deciding');
   } finally {
     s.close();
   }

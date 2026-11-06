@@ -8,7 +8,9 @@
   },
   "scripts": {
     "start": "node src/server.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "migrate": "node scripts/migrate.mjs",
+    "test:integration": "node --test test/integration/*.integration.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.5.0",

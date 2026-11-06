@@ -28,8 +28,7 @@ DoorDash tab ── capture (scroll, redact, stitch) ──► side panel ──
   marked disputed. Open one on any device to read it, see its evidence images, and keep going. New chat starts blank.
 - **Capture again mid-chat** (**+** on the same order) adds new evidence to the chat instead of replacing it.
 - **Suggested questions come from the agent**, and **Mark as disputed** is a command the backend records, not something the model decides.
-- **No manual database step.** On startup the backend creates its own conversation tables (`db/migrations/001_conversations.sql`)
-  with its own database role. If that role is not allowed to create tables, chats answer with a plain 503 and everything else keeps working.
+- **Database changes are migrations, not runtime magic.** The service's database role cannot create or alter tables (by design). Chats need `db/migrations/001_conversations.sql`, applied once by an owner (`npm run migrate`, see `db/README.md`). Until then chats answer a plain 503 and everything else keeps working.
 
 ## What changed in v0.7
 
@@ -54,8 +53,7 @@ src/content/             page reader: parse, redaction regions, scrolling (runs 
 src/shared/              parser, rules, text scrubbing, store/order ID detection, storage
 src/sidepanel/           chat UI (app.js), history, markup, styles
 agent-backend/           Node service: async investigations, Pi agent, Neon store
-db/migrations/           SQL the backend applies to itself on startup (001: conversations, saved chat state, evidence images)
-db/schema.inferred.sql   older tables reconstructed from the queries (NOT the live schema; verify against Neon)
+db/                      reference for the live database, and migrations (000 tracking, 001 conversations) with their runner
 e2e/run.mjs              real extension in Chromium against a mock portal and a fake Pi backend
 ```
 
@@ -64,6 +62,7 @@ e2e/run.mjs              real extension in Chromium against a mock portal and a 
 ```bash
 npm run typecheck
 npm test            # extension unit tests + backend tests (no database, model key or network needed)
+npm --prefix agent-backend run test:integration   # the service against a real Postgres branch (see db/README.md)
 npm run e2e         # needs the Playwright browser in .browsers (npx playwright install chromium)
 ```
 

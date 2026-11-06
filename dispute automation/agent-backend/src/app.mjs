@@ -1,12 +1,12 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { UNRESOLVED_STORE } from './constants.mjs';
+import { PROMPT_VERSION, UNRESOLVED_STORE } from './constants.mjs';
 import { HttpError, idParam, readToken, requiredString, sanitizeCapture, sanitizeConfirm, sanitizeConversationStart, sanitizeMessage } from './validation.mjs';
 
-const TENANT = 'korefi-internal-poc'; // Single internal tenant. Real tenant auth is required before rollout.
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_CONCURRENT_RUNS = 4;
 const MAX_IMAGES_PER_CONVERSATION = 12;
 const DAY_MS = 86_400_000;
+const VERSION = '0.4.0';
 
 const sha = (s) => createHash('sha256').update(s).digest();
 
@@ -44,29 +44,75 @@ export function createLimiter(max, windowMs, now = Date.now) {
   };
 }
 
+/**
+ * A retried request (same Idempotency-Key from the same caller) gets the first answer back instead of doing the work
+ * twice. A failed first attempt is forgotten, so the retry can succeed. Entries expire and the table is bounded.
+ */
+export function createIdempotency({ ttlMs = 15 * 60_000, max = 500, now = Date.now } = {}) {
+  const entries = new Map();
+  return {
+    run(key, fn) {
+      const t = now();
+      for (const [k, e] of entries) if (t - e.at > ttlMs) entries.delete(k);
+      const seen = entries.get(key);
+      if (seen) return seen.promise;
+      if (entries.size >= max) entries.delete(entries.keys().next().value);
+      const promise = Promise.resolve()
+        .then(fn)
+        .catch((err) => {
+          entries.delete(key);
+          throw err;
+        });
+      entries.set(key, { promise, at: t });
+      return promise;
+    },
+  };
+}
+
+const reply = (code, body, headers = {}) => ({ code, body, headers });
+
+/** Database trouble the operator cannot fix is a 503 with a plain message, not a bare 500. */
+function toHttpError(err) {
+  if (err instanceof HttpError) return err;
+  const code = err?.code;
+  if (code === '57014') return new HttpError(503, 'The database is busy. Please try again in a moment.', { 'Retry-After': '5' });
+  if (code === '53300' || code === '57P03' || (typeof code === 'string' && code.startsWith('08')) || ['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND'].includes(code) || /timeout exceeded when trying to connect|Connection terminated/i.test(err?.message || '')) {
+    return new HttpError(503, 'The database is not reachable right now. Please try again in a moment.', { 'Retry-After': '5' });
+  }
+  return null;
+}
+
 export function createApp({ store, investigate, env = process.env, log = (line) => console.log(line), now = Date.now }) {
+  const TENANT = env.TENANT_ID || 'korefi-internal-poc'; // Single internal tenant. Real tenant auth is required before external rollout.
+  const MODEL = env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const RUN_TIMEOUT_MS = Number(env.RUN_TIMEOUT_MS || 110_000);
+  const IMAGE_BUDGET_BYTES = Number(env.IMAGE_BUDGET_MB || 200) * 1024 * 1024;
+  const retentionDays = Number(env.IMAGE_RETENTION_DAYS || 30);
+  const imageExpiry = () => new Date(now() + retentionDays * DAY_MS);
+
   const tokens = loadTokens(env);
   const origins = new Set((env.ALLOWED_EXTENSION_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean));
   const requestLimit = createLimiter(Number(env.RATE_REQUESTS_PER_MIN || 240), 60_000, now);
   const investigationLimit = createLimiter(Number(env.RATE_INVESTIGATIONS_PER_10MIN || 60), 600_000, now);
+  const idempotency = createIdempotency({ now });
   const running = new Map(); // investigation id -> start time, in this process
   const activeConversations = new Set(); // conversations with a message being answered right now
-  const retentionDays = Number(env.IMAGE_RETENTION_DAYS || 30);
-  const imageExpiry = () => new Date(now() + retentionDays * DAY_MS);
+  const startedAt = now();
 
-  function respond(res, code, data, headers = {}) {
+  // ---- http plumbing ----
+
+  function send(res, { code, body, headers }) {
     const base = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers };
     if (code === 204) {
       res.writeHead(204, base);
       return res.end();
     }
+    if (body && body.__bytes) {
+      res.writeHead(code, { ...base, 'Content-Type': body.mime, 'Content-Length': body.bytes.length, 'Cache-Control': 'private, max-age=300' });
+      return res.end(body.bytes);
+    }
     res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', ...base });
-    res.end(JSON.stringify(data));
-  }
-
-  function sendBytes(res, mime, bytes) {
-    res.writeHead(200, { 'Content-Type': mime, 'Content-Length': bytes.length, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff' });
-    res.end(bytes);
+    res.end(JSON.stringify(body));
   }
 
   function auth(req) {
@@ -103,11 +149,27 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     }
   }
 
-  const publicMessage = (err) => (err instanceof HttpError ? err.message : 'The investigation failed. Please try again.');
+  const publicMessage = (err) => {
+    const http = toHttpError(err);
+    return http ? http.message : 'The investigation failed. Please try again.';
+  };
+
+  /** Best-effort audit trail in the existing case_events table. It never blocks or fails the request. */
+  const audit = (caseId, actorType, actorId, type, details) => Promise.resolve(store.recordEvent?.(caseId, actorType, actorId, type, details)).catch(() => {});
+
+  const withTimeout = (promise, ms, message) => {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new HttpError(504, message)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  };
+
+  // ---- single investigations (the original stateless flow) ----
 
   async function runJob({ caseId, id, request }) {
     try {
-      const result = await investigate({ store, tenant: TENANT, request, runId: id, env });
+      const result = await withTimeout(investigate({ store, tenant: TENANT, request, runId: id, env }), RUN_TIMEOUT_MS, 'The agent took too long. Please try again.');
       await store.completeInvestigation(id, result);
       await store.setCaseStatus(caseId, result.recommendation === 'dispute' ? 'ready_to_dispute' : 'captured');
     } catch (err) {
@@ -119,7 +181,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     }
   }
 
-  async function startInvestigation(req, res, who) {
+  async function startInvestigation(req, who) {
     if (!env.OPENAI_API_KEY) throw new HttpError(503, 'AI provider not configured');
     const body = await jsonBody(req);
     const request = sanitizeCapture(body);
@@ -131,38 +193,36 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     // A store that cannot be identified is not an error. The agent works from the capture without history.
     request.storeId = request.storeId || (await store.resolveStore(request.orderId).catch(() => null)) || UNRESOLVED_STORE;
     const c = await store.upsertCase(TENANT, operator, request);
-    const id = await store.createInvestigation(c.id, env.OPENAI_MODEL || 'gpt-4.1-mini');
+    const id = await store.createInvestigation(c.id, MODEL, null, PROMPT_VERSION);
     await store.setCaseStatus(c.id, 'investigating');
     running.set(id, now());
     void runJob({ caseId: c.id, id, request });
-    return respond(res, 202, {
-      investigation_id: id,
-      case_id: c.id,
-      store_id: request.storeId,
-      order_id: request.orderId,
-      status: 'running',
-      poll_after_ms: 1500,
-    });
+    return reply(202, { investigation_id: id, case_id: c.id, store_id: request.storeId, order_id: request.orderId, status: 'running', poll_after_ms: 1500 });
   }
 
-  async function readInvestigation(res, id) {
-    const row = await store.getInvestigation(TENANT, id);
+  async function readInvestigation(id) {
+    let row = await store.getInvestigation(TENANT, id);
     if (!row) throw new HttpError(404, 'Investigation not found');
+    // A run that is marked running but is not running in this process died with a restart. Say so instead of polling forever.
+    // But the row may simply be stale: a run saves its result and only then leaves `running`, so a run that has just
+    // finished is not in `running` while the row we read a moment ago still says running. Read it again before deciding.
+    if (row.status === 'running' && !running.has(row.id)) {
+      row = (await store.getInvestigation(TENANT, id)) || row;
+    }
     let status = row.status;
     let error = row.error_summary;
-    // A run that is marked running but is not running in this process died with a restart. Say so instead of polling forever.
     if (status === 'running' && !running.has(row.id)) {
-      error = 'The server restarted while this investigation was running. Please send it again.';
+      error = 'The server restarted while this was running. Please send it again.';
       await store.failInvestigation(row.id, error).catch(() => {});
       status = 'failed';
     }
     const base = { investigation_id: row.id, status, case_id: row.case_id, store_id: row.platform_store_id, order_id: row.platform_order_id };
-    if (status === 'running') return respond(res, 200, { ...base, poll_after_ms: 1500 });
-    if (status === 'failed') return respond(res, 200, { ...base, error: error || 'The investigation failed. Please try again.' });
+    if (status === 'running') return reply(200, { ...base, poll_after_ms: 1500 });
+    if (status === 'failed') return reply(200, { ...base, error: error || 'The investigation failed. Please try again.' });
     // A chat message keeps its full answer (including suggested follow-ups) with the message itself.
     const message = row.conversation_id ? await store.getMessageForInvestigation(row.id) : null;
     const r = message?.result || {};
-    return respond(res, 200, {
+    return reply(200, {
       ...base,
       ...(row.conversation_id ? { conversation_id: String(row.conversation_id), message_id: message ? String(message.id) : null } : {}),
       recommendation: r.recommendation ?? row.recommendation,
@@ -192,6 +252,28 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     });
   }
 
+  /**
+   * Stores evidence images inside the storage budget (the database has a hard size limit that would stop every write
+   * if it were reached). Over budget, it sweeps expired images first; if still over, the images are skipped and the
+   * caller is told, so the chat carries on from text instead of failing.
+   */
+  async function storeImages(conv, dataUrls) {
+    if (!dataUrls.length) return { stored: 0, dropped: 0 };
+    const decoded = decodeImages(dataUrls);
+    const incoming = decoded.reduce((n, d) => n + d.bytes.length, 0);
+    let used = await store.imageBytesUsed();
+    if (used + incoming > IMAGE_BUDGET_BYTES) {
+      await store.purgeExpiredImages().catch(() => {});
+      used = await store.imageBytesUsed();
+    }
+    if (used + incoming > IMAGE_BUDGET_BYTES) {
+      log(JSON.stringify({ level: 'warn', event: 'image_budget_full', usedBytes: used, incomingBytes: incoming }));
+      return { stored: 0, dropped: decoded.length };
+    }
+    await store.saveImages(conv.id, conv.case_id, decoded, imageExpiry());
+    return { stored: decoded.length, dropped: 0 };
+  }
+
   const publicConversation = (c) => ({
     id: String(c.id),
     case_id: String(c.case_id),
@@ -207,14 +289,16 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     updated_at: c.updated_at,
   });
 
-  // Chats need their tables. If the first check or attempt failed, try again (at most once a minute) and say so plainly.
+  // Chats need their tables. If the first check failed, look again (at most every 30 seconds) and say so plainly.
   async function requireChats() {
     if (store.conversationsReady?.() === true) return;
     const state = await store.ensureConversations?.();
-    if (state && !state.ready) throw new HttpError(503, 'Chats are not set up in the database yet. The service will keep trying; if this persists, the database role may not be allowed to create tables.');
+    if (state && !state.ready) {
+      throw new HttpError(503, 'Chats are not available right now. The database setup for chats is incomplete. Your other work is not affected.', { 'Retry-After': '30' });
+    }
   }
 
-  async function startConversation(req, res, who) {
+  async function startConversation(req, who) {
     await requireChats();
     const body = await jsonBody(req);
     const p = sanitizeConversationStart(body);
@@ -223,23 +307,31 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     p.storeId = p.storeId || (await store.resolveStore(p.orderId).catch(() => null)) || UNRESOLVED_STORE;
     const c = await store.upsertCase(TENANT, operator, p);
     const id = await store.createConversation(TENANT, c.id, operator, p.title || `Order ${p.orderId}`);
-    if (p.screenshots.length) await store.saveImages(id, c.id, decodeImages(p.screenshots), imageExpiry());
-    return respond(res, 201, { conversation_id: String(id), case_id: String(c.id), store_id: p.storeId, order_id: p.orderId, images: p.screenshots.length });
+    const images = await storeImages({ id, case_id: c.id }, p.screenshots);
+    void audit(c.id, 'operator', operator, 'conversation_opened', { conversation_id: String(id), images: images.stored });
+    return reply(201, {
+      conversation_id: String(id),
+      case_id: String(c.id),
+      store_id: p.storeId,
+      order_id: p.orderId,
+      images: images.stored,
+      images_dropped: images.dropped,
+    });
   }
 
-  async function listConversations(res, url) {
+  async function listConversations(url) {
     await requireChats();
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
     const rows = await store.listConversations(TENANT, limit);
-    return respond(res, 200, { conversations: rows.map(publicConversation) });
+    return reply(200, { conversations: rows.map(publicConversation) });
   }
 
-  async function readConversation(res, id) {
+  async function readConversation(id) {
     await requireChats();
     const conv = await store.getConversation(TENANT, id);
     if (!conv) throw new HttpError(404, 'Conversation not found');
     const [messages, images] = await Promise.all([store.listMessages(conv.id), store.listImages(conv.id)]);
-    return respond(res, 200, {
+    return reply(200, {
       conversation: publicConversation(conv),
       running: activeConversations.has(String(conv.id)),
       messages: messages.map((m) => ({
@@ -254,16 +346,16 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     });
   }
 
-  async function readImage(res, convId, imageId) {
+  async function readImage(convId, imageId) {
     await requireChats();
     const conv = await store.getConversation(TENANT, convId);
     if (!conv) throw new HttpError(404, 'Conversation not found');
     const image = await store.getImage(conv.id, imageId);
     if (!image) throw new HttpError(404, 'Image not found or expired');
-    return sendBytes(res, image.mime, Buffer.from(image.bytes));
+    return reply(200, { __bytes: true, mime: image.mime, bytes: Buffer.from(image.bytes) });
   }
 
-  async function runConversationJob({ conv, id, message }) {
+  async function runConversationJob({ conv, id, message, operator }) {
     try {
       const transcript = await store.loadTranscript(conv.id);
       const stored = await store.loadImages(conv.id);
@@ -284,7 +376,11 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
         screenshots: [],
         conversation: [],
       };
-      const { transcript: next, ...result } = await investigate({ store, tenant: TENANT, request, runId: id, env, transcript, images });
+      const { transcript: next, ...result } = await withTimeout(
+        investigate({ store, tenant: TENANT, request, runId: id, env, transcript, images }),
+        RUN_TIMEOUT_MS,
+        'The agent took too long. Please try again.',
+      );
       const payload = { ...result, suggested_followups: suggestedFollowups(result) };
       // Order matters: the answer and the transcript are saved before the run is marked completed, so a poll never sees a finished run without its message.
       await store.appendMessage(conv.id, 'assistant', result.reasoning_summary, payload, id);
@@ -292,6 +388,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
       await store.touchConversation(conv.id, { lastRecommendation: result.recommendation });
       await store.completeInvestigation(id, result);
       await store.setCaseStatus(conv.case_id, result.recommendation === 'dispute' ? 'ready_to_dispute' : 'captured');
+      void audit(conv.case_id, 'agent', result.model || MODEL, 'agent_answered', { conversation_id: String(conv.id), investigation_id: String(id), recommendation: result.recommendation });
     } catch (err) {
       log(JSON.stringify({ level: 'error', event: 'conversation_run_failed', investigation: String(id), conversation: String(conv.id), message: String(err?.message || err).slice(0, 300) }));
       const why = publicMessage(err);
@@ -304,13 +401,14 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     }
   }
 
-  async function postMessage(req, res, who, convId) {
+  async function postMessage(req, who, convId) {
     await requireChats();
     if (!env.OPENAI_API_KEY) throw new HttpError(503, 'AI provider not configured');
     const body = await jsonBody(req);
     const message = sanitizeMessage(body);
     const conv = await store.getConversation(TENANT, convId);
     if (!conv) throw new HttpError(404, 'Conversation not found');
+    const operator = who.operator || (typeof body.operator_id === 'string' && body.operator_id.trim() ? body.operator_id.trim().slice(0, 128) : 'unknown');
     const key = String(conv.id);
     // Claim the chat before any await, so two quick sends cannot both start a run.
     if (activeConversations.has(key)) throw new HttpError(409, 'The agent is still answering your last message in this chat.');
@@ -319,27 +417,29 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
       const wait = investigationLimit(who.key);
       if (wait) throw new HttpError(429, 'Too many investigations. Try again in a few minutes.', { 'Retry-After': String(wait) });
       if (running.size >= MAX_CONCURRENT_RUNS) throw new HttpError(429, 'The agent is busy with other investigations. Try again in a minute.', { 'Retry-After': '30' });
+      let images = { stored: 0, dropped: 0 };
       if (message.screenshots.length) {
         if ((await store.countImages(conv.id)) + message.screenshots.length > MAX_IMAGES_PER_CONVERSATION) {
           throw new HttpError(422, `A chat can hold at most ${MAX_IMAGES_PER_CONVERSATION} images. Start a new chat for more.`);
         }
-        await store.saveImages(conv.id, conv.case_id, decodeImages(message.screenshots), imageExpiry());
+        images = await storeImages(conv, message.screenshots);
+        if (images.stored) void audit(conv.case_id, 'operator', operator, 'evidence_added', { conversation_id: String(conv.id), images: images.stored });
       }
       const first = (await store.listMessages(conv.id, 1)).length === 0;
       await store.appendMessage(conv.id, 'user', message.text);
       if (first) await store.touchConversation(conv.id, { title: `${conv.platform_order_id} · ${message.text}`.slice(0, 100) });
-      const id = await store.createInvestigation(conv.case_id, env.OPENAI_MODEL || 'gpt-4.1-mini', conv.id);
+      const id = await store.createInvestigation(conv.case_id, MODEL, conv.id, PROMPT_VERSION);
       await store.setCaseStatus(conv.case_id, 'investigating');
       running.set(id, now());
-      void runConversationJob({ conv, id, message });
-      return respond(res, 202, { investigation_id: id, conversation_id: key, status: 'running', poll_after_ms: 1500 });
+      void runConversationJob({ conv, id, message, operator });
+      return reply(202, { investigation_id: id, conversation_id: key, status: 'running', poll_after_ms: 1500, images_dropped: images.dropped });
     } catch (err) {
       activeConversations.delete(key);
       throw err;
     }
   }
 
-  async function confirmDispute(req, res, who) {
+  async function confirmDispute(req, who) {
     const body = await jsonBody(req);
     const p = sanitizeConfirm(body);
     const operator = who.operator || requiredString(body.operator_id, 'operator_id', 128);
@@ -369,39 +469,57 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
       await store.appendMessage(conv.id, 'system', `Marked as disputed by ${operator}. The dispute was filed in DoorDash by the operator.`).catch(() => {});
       await store.touchConversation(conv.id, { status: 'disputed' }).catch(() => {});
     }
-    return respond(res, 200, { ...r, case_id: c.id, store_id: c.platform_store_id });
+    return reply(200, { ...r, case_id: c.id, store_id: c.platform_store_id });
   }
 
-  async function handle(req, res, rid) {
+  // ---- routing ----
+
+  /** Returns the reply for a request that has passed authentication and rate limiting. */
+  async function route(req, who, url) {
+    const path = url.pathname;
+    const idem = req.headers['idempotency-key'];
+    const once = (fn) => {
+      if (idem === undefined) return fn();
+      if (typeof idem !== 'string' || !/^[A-Za-z0-9_-]{8,80}$/.test(idem)) throw new HttpError(422, 'Invalid Idempotency-Key');
+      return idempotency.run(`${who.key}:${req.method}:${path}:${idem}`, fn);
+    };
+
+    if (req.method === 'GET' && path === '/readyz') {
+      const ok = await store.ready();
+      const chats = store.conversationsReady ? ((await store.ensureConversations?.())?.ready ? 'ready' : 'missing') : 'ready';
+      return reply(200, { ok, db: ok ? 'connected' : 'unavailable', conversations: chats, model_configured: !!env.OPENAI_API_KEY, store_restrictions: 'derived_from_order' });
+    }
+    if (req.method === 'POST' && path === '/v1/investigations') return once(() => startInvestigation(req, who));
+    const poll = path.match(/^\/v1\/investigations\/([A-Za-z0-9_-]{1,64})$/);
+    if (req.method === 'GET' && poll) return readInvestigation(poll[1]);
+    if (req.method === 'POST' && path === '/v1/conversations') return once(() => startConversation(req, who));
+    if (req.method === 'GET' && path === '/v1/conversations') return listConversations(url);
+    const conv = path.match(/^\/v1\/conversations\/([A-Za-z0-9_-]{1,64})(?:\/(messages)|\/images\/([A-Za-z0-9_-]{1,64}))?$/);
+    if (conv) {
+      const [, convId, messages, imageId] = conv;
+      idParam(convId, 'conversation id');
+      if (req.method === 'GET' && !messages && !imageId) return readConversation(convId);
+      if (req.method === 'POST' && messages) return once(() => postMessage(req, who, convId));
+      if (req.method === 'GET' && imageId) return readImage(convId, imageId);
+    }
+    if (req.method === 'POST' && path === '/v1/disputes/confirm') return confirmDispute(req, who);
+    throw new HttpError(404, 'Not found');
+  }
+
+  async function handle(req, res) {
     cors(req, res);
-    const route = new URL(req.url, 'http://localhost').pathname;
-    if (req.method === 'GET' && route === '/healthz') return respond(res, 200, { ok: true, service: 'korefi-pi-dispute-agent', version: '0.3.0' });
-    if (req.method === 'OPTIONS') return respond(res, 204);
+    const url = new URL(req.url, 'http://localhost');
+    if (req.method === 'GET' && url.pathname === '/healthz') {
+      return send(res, reply(200, { ok: true, service: 'korefi-pi-dispute-agent', version: VERSION, commit: (env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, uptime_s: Math.round((now() - startedAt) / 1000) }));
+    }
+    if (req.method === 'OPTIONS') return send(res, reply(204));
     const who = auth(req);
     res.who = who.operator || who.key;
     const wait = requestLimit(who.key);
     if (wait) throw new HttpError(429, 'Too many requests. Slow down.', { 'Retry-After': String(wait) });
-
-    if (req.method === 'GET' && route === '/readyz') {
-      const ok = await store.ready();
-      const chats = store.conversationsReady ? ((await store.ensureConversations?.())?.ready ? 'ready' : 'missing') : 'ready';
-      return respond(res, 200, { ok, db: ok ? 'connected' : 'unavailable', conversations: chats, model_configured: !!env.OPENAI_API_KEY, store_restrictions: 'derived_from_order' });
-    }
-    if (req.method === 'POST' && route === '/v1/investigations') return startInvestigation(req, res, who);
-    if (req.method === 'POST' && route === '/v1/conversations') return startConversation(req, res, who);
-    if (req.method === 'GET' && route === '/v1/conversations') return listConversations(res, new URL(req.url, 'http://localhost'));
-    const convRoute = route.match(/^\/v1\/conversations\/([A-Za-z0-9_-]{1,64})(?:\/(messages)|\/images\/([A-Za-z0-9_-]{1,64}))?$/);
-    if (convRoute) {
-      const [, convId, messages, imageId] = convRoute;
-      idParam(convId, 'conversation id');
-      if (req.method === 'GET' && !messages && !imageId) return readConversation(res, convId);
-      if (req.method === 'POST' && messages) return postMessage(req, res, who, convId);
-      if (req.method === 'GET' && imageId) return readImage(res, convId, imageId);
-    }
-    const poll = route.match(/^\/v1\/investigations\/([A-Za-z0-9_-]{1,64})$/);
-    if (req.method === 'GET' && poll) return readInvestigation(res, poll[1]);
-    if (req.method === 'POST' && route === '/v1/disputes/confirm') return confirmDispute(req, res, who);
-    throw new HttpError(404, 'Not found');
+    send(res, await route(req, who, url));
+    // A replayed request never read its body; let the connection move on.
+    req.resume();
   }
 
   function handler(req, res) {
@@ -409,20 +527,29 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     const started = now();
     res.setHeader('X-Request-Id', rid);
     res.on('finish', () => {
-      // Method, path, status, timing and who. Never bodies, tokens or screenshots.
+      // Method, path, status, timing and who. Never bodies, tokens or images.
       log(JSON.stringify({ level: 'info', rid, method: req.method, path: (req.url || '').split('?')[0], status: res.statusCode, ms: now() - started, who: res.who || null }));
     });
-    handle(req, res, rid).catch((e) => {
-      const status = e instanceof HttpError ? e.status : 500;
-      if (status === 500) log(JSON.stringify({ level: 'error', rid, message: String(e?.message || e).slice(0, 300) }));
-      if (!res.headersSent) respond(res, status, { error: status === 500 ? 'Request failed; consult server logs' : e.message }, e instanceof HttpError ? e.headers : {});
+    handle(req, res).catch((e) => {
+      const http = toHttpError(e);
+      if (!http) log(JSON.stringify({ level: 'error', rid, message: String(e?.message || e).slice(0, 300), code: e?.code || null }));
+      // A request body that was never read would hold the connection open.
+      req.resume();
+      if (!res.headersSent) send(res, reply(http ? http.status : 500, { error: http ? http.message : 'Request failed; consult server logs', request_id: rid }, http ? http.headers : {}));
     });
   }
 
-  return { handler, running };
+  /** Resolves when no agent run is in flight, or after `ms`, so a deploy does not cut an answer off mid-way. */
+  async function drain(ms = 25_000) {
+    const end = now() + ms;
+    while (running.size > 0 && now() < end) await new Promise((r) => setTimeout(r, 200));
+    return running.size === 0;
+  }
+
+  return { handler, running, drain };
 }
 
-/** Deletes expired evidence images now and every few hours. Safe before migration 001: a missing table is just logged. */
+/** Deletes expired evidence images now and every few hours. A missing table is just logged. */
 export function startMaintenance({ store, log = (line) => console.log(line), everyMs = 6 * 3_600_000 }) {
   const sweep = async () => {
     try {

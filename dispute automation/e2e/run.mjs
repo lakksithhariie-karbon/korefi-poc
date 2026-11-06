@@ -228,7 +228,7 @@ try {
   writeFileSync(path.join(out, 'captured-full.jpg'), Buffer.from(c1.image.split(',')[1], 'base64'));
 
   // 2. Panel: the screenshot is attached; the first message opens a chat on the server and uploads the slices once.
-  panel.on('request', (r) => { if (r.method() === 'POST' && r.url().includes(`:${piPort}/`)) pi.bodies.push({ url: new URL(r.url()).pathname, raw: r.postData() || '' }); });
+  panel.on('request', (r) => { if (r.method() === 'POST' && r.url().includes(`:${piPort}/`)) pi.bodies.push({ url: new URL(r.url()).pathname, raw: r.postData() || '', key: r.headers()['idempotency-key'] || null }); });
   await panel.waitForSelector('#attachment:not([hidden])');
   check('screenshot is attached to the composer', true);
   await panel.fill('#prompt', 'Can we dispute this?');
@@ -247,6 +247,8 @@ try {
   check('item names reach the agent (not scrubbed)', !!opened && /Wintermelon Lemon/.test(opened.raw));
   const msg1 = pi.bodies.find((b) => b.url.endsWith('/messages'));
   check('the message itself carries no images', !!msg1 && !('screenshots' in JSON.parse(msg1.raw)));
+  const keyed = pi.bodies.filter((b) => b.url === '/v1/conversations' || b.url.endsWith('/messages'));
+  check('every create and message request carries its own idempotency key', keyed.length >= 2 && keyed.every((b) => /^[0-9a-f-]{36}$/.test(b.key || '')) && new Set(keyed.map((b) => b.key)).size === keyed.length, JSON.stringify(keyed.map((b) => b.key)));
   check('the server stored the chat, its images and both messages', store.conversations.length === 1 && store.images.length === openedBody.screenshots.length && store.messages.length === 2);
   check('first turn: agent got the case facts and every image', agentCalls[0].transcript.length === 0 && agentCalls[0].images.length === openedBody.screenshots.length && agentCalls[0].request.issueCategory === 'Missing entire item', JSON.stringify(agentCalls[0].request.issueCategory));
   check('recommendation shown', (await panel.locator('.assessment .big').last().innerText()) === 'Needs review');

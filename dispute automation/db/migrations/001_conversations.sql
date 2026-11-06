@@ -1,69 +1,82 @@
--- KoreFi dispute assistant: conversations, saved chat state, and evidence images.
+-- Conversations: a chat per question thread, the agent's saved transcript, and the redacted evidence images it looks at.
 --
--- The backend applies this itself when it starts, with its own limited database role, if the tables are missing.
--- It is written so that works: it only creates NEW tables in the dispute_automation schema, so the role ends up owning them
--- and needs no grants. It does not alter, and does not add foreign keys to, any existing table (those would need
--- ownership of, or REFERENCES on, tables this role may not own). Cross-table links are plain ids.
--- Safe to run again: everything is IF NOT EXISTS. Running it by hand as an admin is only needed if the backend
--- role is not allowed to create tables; in that case also grant that role access to the five new tables.
+-- Written against the live dispute_automation schema: uuid keys (like every existing table), and the same
+-- tenant-scoped foreign key that submissions uses, so a chat can never point at another tenant's case.
+-- Existing tables are not altered. The service role (korefi_dispute_agent_rw) gets read/write on the new
+-- tables only; it cannot create or change tables, by design. Apply with `npm run migrate` as an owner role.
 
-BEGIN;
-
--- One chat. A case (order) can have many chats.
 CREATE TABLE IF NOT EXISTS dispute_automation.conversations (
-  id                  bigserial PRIMARY KEY,
-  tenant_id           text   NOT NULL,
-  case_id             bigint NOT NULL,                         -- dispute_automation.cases.id
-  title               text   NOT NULL DEFAULT 'New chat',
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id           text NOT NULL CHECK (length(btrim(tenant_id)) > 0),
+  case_id             uuid NOT NULL,
+  title               text NOT NULL DEFAULT 'New chat' CHECK (char_length(title) <= 200),
   created_by          text,
-  status              text   NOT NULL DEFAULT 'open',          -- open | disputed
-  last_recommendation text,                                    -- dispute | needs_review | do_not_dispute
+  status              text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'disputed', 'archived')),
+  last_recommendation text CHECK (last_recommendation IS NULL OR last_recommendation IN ('dispute', 'needs_review', 'do_not_dispute')),
   created_at          timestamptz NOT NULL DEFAULT now(),
-  updated_at          timestamptz NOT NULL DEFAULT now()
+  updated_at          timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT conversations_case_scope_fk FOREIGN KEY (tenant_id, case_id) REFERENCES dispute_automation.cases (tenant_id, id)
 );
 CREATE INDEX IF NOT EXISTS conversations_tenant_updated_idx ON dispute_automation.conversations (tenant_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS conversations_case_idx           ON dispute_automation.conversations (case_id);
+CREATE INDEX IF NOT EXISTS conversations_case_idx ON dispute_automation.conversations (case_id);
 
--- What the operator sees in the chat, in order. Assistant rows carry the structured answer in `result`.
+-- What the operator sees, in order. Assistant rows carry the structured answer in `result`.
 CREATE TABLE IF NOT EXISTS dispute_automation.conversation_messages (
-  id               bigserial PRIMARY KEY,
-  conversation_id  bigint NOT NULL REFERENCES dispute_automation.conversations(id) ON DELETE CASCADE,
-  role             text   NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-  text             text   NOT NULL,
-  result           jsonb,                                      -- recommendation, draft, missing evidence, follow-ups, tools used
-  investigation_id bigint,                                     -- dispute_automation.investigations.id
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  seq              bigint GENERATED ALWAYS AS IDENTITY,
+  conversation_id  uuid NOT NULL REFERENCES dispute_automation.conversations (id) ON DELETE CASCADE,
+  role             text NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+  text             text NOT NULL CHECK (char_length(text) <= 20000),
+  result           jsonb,
+  investigation_id uuid REFERENCES dispute_automation.investigations (id) ON DELETE SET NULL,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS conversation_messages_conv_idx ON dispute_automation.conversation_messages (conversation_id, id);
-CREATE INDEX IF NOT EXISTS conversation_messages_inv_idx  ON dispute_automation.conversation_messages (investigation_id);
+CREATE INDEX IF NOT EXISTS conversation_messages_conv_idx ON dispute_automation.conversation_messages (conversation_id, seq);
+CREATE INDEX IF NOT EXISTS conversation_messages_inv_idx ON dispute_automation.conversation_messages (investigation_id) WHERE investigation_id IS NOT NULL;
 
--- Which chat an agent run belongs to (kept here so the existing investigations table is left alone).
+-- Which chat an agent run belongs to. Kept here so the existing investigations table is left untouched.
 CREATE TABLE IF NOT EXISTS dispute_automation.conversation_runs (
-  investigation_id bigint PRIMARY KEY,                         -- dispute_automation.investigations.id
-  conversation_id  bigint NOT NULL REFERENCES dispute_automation.conversations(id) ON DELETE CASCADE,
+  investigation_id uuid PRIMARY KEY REFERENCES dispute_automation.investigations (id) ON DELETE CASCADE,
+  conversation_id  uuid NOT NULL REFERENCES dispute_automation.conversations (id) ON DELETE CASCADE,
   created_at       timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS conversation_runs_conv_idx ON dispute_automation.conversation_runs (conversation_id);
 
 -- The agent's own transcript, so the next message continues the same conversation (tool results included).
 -- Image data is never stored here; images live in evidence_images and are attached again on every turn.
 CREATE TABLE IF NOT EXISTS dispute_automation.conversation_state (
-  conversation_id bigint PRIMARY KEY REFERENCES dispute_automation.conversations(id) ON DELETE CASCADE,
+  conversation_id uuid PRIMARY KEY REFERENCES dispute_automation.conversations (id) ON DELETE CASCADE,
   pi_messages     jsonb NOT NULL DEFAULT '[]'::jsonb,
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- Redacted screenshot slices and any extra evidence photos. Deleted after expires_at (default 30 days).
+-- Redacted screenshot slices and extra evidence photos. Removed after expires_at. This table is the storage seam:
+-- when object storage is chosen, bytes move there and only metadata stays (see cases.screenshot_object_key).
 CREATE TABLE IF NOT EXISTS dispute_automation.evidence_images (
-  id              bigserial PRIMARY KEY,
-  conversation_id bigint NOT NULL REFERENCES dispute_automation.conversations(id) ON DELETE CASCADE,
-  case_id         bigint NOT NULL,                             -- dispute_automation.cases.id
-  mime            text   NOT NULL,
-  bytes           bytea  NOT NULL,
-  byte_size       integer NOT NULL,
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  seq             bigint GENERATED ALWAYS AS IDENTITY,
+  conversation_id uuid NOT NULL REFERENCES dispute_automation.conversations (id) ON DELETE CASCADE,
+  case_id         uuid NOT NULL REFERENCES dispute_automation.cases (id),
+  mime            text NOT NULL CHECK (mime IN ('image/jpeg', 'image/png')),
+  bytes           bytea NOT NULL,
+  byte_size       integer NOT NULL CHECK (byte_size > 0 AND byte_size <= 5242880),
   created_at      timestamptz NOT NULL DEFAULT now(),
   expires_at      timestamptz NOT NULL
 );
-CREATE INDEX IF NOT EXISTS evidence_images_conv_idx    ON dispute_automation.evidence_images (conversation_id, id);
+CREATE INDEX IF NOT EXISTS evidence_images_conv_idx ON dispute_automation.evidence_images (conversation_id, seq);
 CREATE INDEX IF NOT EXISTS evidence_images_expires_idx ON dispute_automation.evidence_images (expires_at);
 
-COMMIT;
+-- Explicit, so a fresh environment works without relying on default privileges.
+DO $grants$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'korefi_dispute_agent_rw') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON
+      dispute_automation.conversations,
+      dispute_automation.conversation_messages,
+      dispute_automation.conversation_runs,
+      dispute_automation.conversation_state,
+      dispute_automation.evidence_images
+    TO korefi_dispute_agent_rw;
+  END IF;
+END
+$grants$;

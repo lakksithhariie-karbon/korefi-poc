@@ -279,7 +279,9 @@
     return `Request failed (HTTP ${status})${d?': '+d:''}`;
   }
   async function piFetch(path,options={}){
-    const attempt=()=>fetch(piBase()+path,{method:options.method,body:options.body,headers:piHeaders(),signal:AbortSignal.timeout(options.timeout||60000)});
+    // One key per logical request, reused if the request is retried, so the server does the work once.
+    const headers={...piHeaders(),...(options.key?{'Idempotency-Key':options.key}:{})};
+    const attempt=()=>fetch(piBase()+path,{method:options.method,body:options.body,headers,signal:AbortSignal.timeout(options.timeout||60000)});
     let response;
     try{response=await attempt();}
     catch{await sleep(4000);try{response=await attempt();}catch{throw Error('Could not reach the KoreFi agent. Check your connection and the backend URL in Settings.');}}
@@ -325,9 +327,10 @@
   }
   // Opens the chat on the server the first time something is sent. The redacted screenshot slices are uploaded once, here.
   async function createConversation(shots){
-    const created=await (await piFetch('/v1/conversations',{method:'POST',body:JSON.stringify({...caseFacts(current),screenshots:shots}),timeout:90000})).json();
+    const created=await (await piFetch('/v1/conversations',{method:'POST',key:crypto.randomUUID(),body:JSON.stringify({...caseFacts(current),screenshots:shots}),timeout:90000})).json();
     if(!created?.conversation_id)throw Error('The agent could not open a chat. Please try again.');
     conversationId=String(created.conversation_id);
+    if(created.images_dropped)toast('Image storage is full, so the agent will work from the page text only. Tell an admin.');
     removeAttachment();
     await patchCase(current.id,{conversationId}).catch(()=>{});
   }
@@ -345,7 +348,8 @@
       if(shots.length)body.screenshots=shots;
       if(attachedCase.id!==current.id&&attachedCase.redactedText)body.additional_text=String(attachedCase.redactedText).slice(0,11000);
     }
-    const started=await (await piFetch(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`,{method:'POST',body:JSON.stringify(body),timeout:90000})).json();
+    const started=await (await piFetch(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`,{method:'POST',key:crypto.randomUUID(),body:JSON.stringify(body),timeout:90000})).json();
+    if(started?.images_dropped)toast('Image storage is full, so these images were not saved. The agent will use the text.');
     if(!started?.investigation_id)throw Error('The agent did not accept the message. Please try again.');
     // The server has the images now. Taking the chip away stops a retry from uploading them twice.
     removeAttachment();
