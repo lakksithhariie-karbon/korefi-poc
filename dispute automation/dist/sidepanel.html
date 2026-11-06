@@ -13,6 +13,7 @@
       <button class="icon-button" id="newChat" title="New investigation" aria-label="New investigation" type="button">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M15 4h6v6M21 4l-10 10"/></svg>
       </button>
+      <button class="icon-button" id="historyButton" type="button" title="Chat history" aria-label="Chat history" aria-controls="historyPanel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
       <div class="wordmark">
         <img id="officialLogo" src="logo.png" alt="KoreFi" referrerpolicy="no-referrer">
         <span id="logoFallback" class="brand-name" hidden>KoreFi</span>
@@ -105,6 +106,11 @@
       </div>
       <button class="primary settings-save" id="saveSettings" type="button">Save connection</button>
       <p class="settings-note">Pilot access only. Keep this token private. Future team versions should use operator sign-in instead of a shared token.</p>
+    </section>
+
+    <section class="settings-panel history-panel" id="historyPanel" hidden aria-labelledby="historyHeading">
+      <div class="settings-head"><div><span class="section-eyebrow">Your chats</span><h2 id="historyHeading">History</h2></div><button id="closeHistory" class="icon-button" type="button" aria-label="Close history">✕</button></div>
+      <div class="history-list" id="historyList"></div>
     </section>
 
     <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Captured screenshot" hidden>

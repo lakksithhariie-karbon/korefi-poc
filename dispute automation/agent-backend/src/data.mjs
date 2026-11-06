@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
+import { CONVERSATION_TABLES, createMigrator } from './migrate.mjs';
 import { UNRESOLVED_STORE } from './constants.mjs';
 import { withSslMode } from './ssl.mjs';
 import { HttpError } from './validation.mjs';
@@ -19,7 +21,46 @@ export function createPgStore(env = process.env) {
     return { db: writePool, history: historyPool };
   }
 
+  const loadMigrationSql = () => {
+    try {
+      return readFileSync(new URL('../../db/migrations/001_conversations.sql', import.meta.url), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const migrator = createMigrator(
+    {
+      async missingTables() {
+        const { db } = pools();
+        const { rows } = await db.query(
+          "SELECT t FROM unnest($1::text[]) AS t WHERE to_regclass('dispute_automation.' || t) IS NULL",
+          [CONVERSATION_TABLES],
+        );
+        return rows.map((r) => r.t);
+      },
+      async applyMigration() {
+        const sql = loadMigrationSql();
+        if (!sql) throw new Error('Migration file not found next to the backend');
+        const { db } = pools();
+        const client = await db.connect();
+        try {
+          // One instance at a time, so two starting together do not race.
+          await client.query('SELECT pg_advisory_lock(727001)');
+          await client.query(sql);
+        } finally {
+          await client.query('SELECT pg_advisory_unlock(727001)').catch(() => {});
+          client.release();
+        }
+      },
+    },
+    { log: (line) => console.log(line) },
+  );
+
   return {
+    /** Chats are usable. Null until the first check. */
+    conversationsReady: () => migrator.ready(),
+    /** Creates the conversation tables if missing, using this service's own role. Never throws. */
+    ensureConversations: (opts) => migrator.ensure(opts),
     async ready() {
       const { db, history } = pools();
       const [a, b] = await Promise.all([
@@ -88,12 +129,16 @@ export function createPgStore(env = process.env) {
       );
     },
 
-    async createInvestigation(caseId, modelId) {
+    async createInvestigation(caseId, modelId, conversationId = null) {
       const { db } = pools();
       const { rows } = await db.query(
         "INSERT INTO dispute_automation.investigations(case_id,agent_runtime,model_id,status) VALUES($1,'pi',$2,'running') RETURNING id",
         [caseId, modelId],
       );
+      // The link to a chat lives in its own table, so the existing investigations table is never altered.
+      if (conversationId) {
+        await db.query('INSERT INTO dispute_automation.conversation_runs(investigation_id,conversation_id) VALUES($1,$2)', [rows[0].id, conversationId]);
+      }
       return rows[0].id;
     },
 
@@ -132,8 +177,16 @@ export function createPgStore(env = process.env) {
       const row = found.rows[0];
       if (!row) return null;
       const calls = await db.query('SELECT tool_name,status,result_summary FROM dispute_automation.agent_tool_calls WHERE investigation_id=$1 ORDER BY id', [id]);
+      let conversationId = null;
+      try {
+        const link = await db.query('SELECT conversation_id FROM dispute_automation.conversation_runs WHERE investigation_id=$1', [id]);
+        conversationId = link.rows[0]?.conversation_id ?? null;
+      } catch (err) {
+        if (!err || err.code !== '42P01') throw err; // 42P01: chats are not set up yet, so this cannot be a chat run
+      }
       return {
         ...row,
+        conversation_id: conversationId,
         tools: calls.rows.map((t) => ({ name: t.tool_name, status: t.status, count: Number(t.result_summary?.record_count ?? 0) })),
       };
     },
@@ -168,6 +221,167 @@ export function createPgStore(env = process.env) {
         await this.recordEvent(caseId, actor, 'operator_confirmed_submission', { submission_id: result.rows[0].id });
       }
       return { id: result.rows[0].id, submitted_at: result.rows[0].submitted_at, already_recorded: alreadyRecorded };
+    },
+
+    // ---- conversations (need migration 001) ----
+
+    async getCaseFacts(caseId) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        `SELECT id,platform_store_id,platform_order_id,order_url,issue_category,issue_description,error_amount,structured_facts,redacted_page_text
+          FROM dispute_automation.cases WHERE id=$1`,
+        [caseId],
+      );
+      return rows[0] || null;
+    },
+
+    async createConversation(tenant, caseId, operator, title) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        'INSERT INTO dispute_automation.conversations(tenant_id,case_id,created_by,title) VALUES($1,$2,$3,$4) RETURNING id',
+        [tenant, caseId, operator, title],
+      );
+      return rows[0].id;
+    },
+
+    async getConversation(tenant, id) {
+      const { db } = pools();
+      try {
+        const { rows } = await db.query(
+          `SELECT v.id,v.case_id,v.title,v.status,v.created_by,v.last_recommendation,v.created_at,v.updated_at,
+              c.platform_order_id,c.platform_store_id,c.case_status
+            FROM dispute_automation.conversations v JOIN dispute_automation.cases c ON c.id=v.case_id
+            WHERE v.id=$1 AND v.tenant_id=$2`,
+          [id, tenant],
+        );
+        return rows[0] || null;
+      } catch (err) {
+        if (err && err.code === '22P02') return null;
+        throw err;
+      }
+    },
+
+    async listConversations(tenant, limit = 50) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        `SELECT v.id,v.case_id,v.title,v.status,v.created_by,v.last_recommendation,v.created_at,v.updated_at,
+            c.platform_order_id,c.platform_store_id,c.error_amount
+          FROM dispute_automation.conversations v JOIN dispute_automation.cases c ON c.id=v.case_id
+          WHERE v.tenant_id=$1 ORDER BY v.updated_at DESC LIMIT $2`,
+        [tenant, limit],
+      );
+      return rows;
+    },
+
+    async touchConversation(id, patch = {}) {
+      const { db } = pools();
+      await db.query(
+        `UPDATE dispute_automation.conversations SET
+            title=COALESCE($2,title), status=COALESCE($3,status), last_recommendation=COALESCE($4,last_recommendation), updated_at=now()
+          WHERE id=$1`,
+        [id, patch.title ?? null, patch.status ?? null, patch.lastRecommendation ?? null],
+      );
+    },
+
+    async appendMessage(conversationId, role, text, result = null, investigationId = null) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        'INSERT INTO dispute_automation.conversation_messages(conversation_id,role,text,result,investigation_id) VALUES($1,$2,$3,$4::jsonb,$5) RETURNING id',
+        [conversationId, role, text, result ? JSON.stringify(result) : null, investigationId],
+      );
+      return rows[0].id;
+    },
+
+    async listMessages(conversationId, limit = 300) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        'SELECT id,role,text,result,investigation_id,created_at FROM dispute_automation.conversation_messages WHERE conversation_id=$1 ORDER BY id LIMIT $2',
+        [conversationId, limit],
+      );
+      return rows;
+    },
+
+    async getMessageForInvestigation(investigationId) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        "SELECT id,role,text,result FROM dispute_automation.conversation_messages WHERE investigation_id=$1 AND role='assistant' ORDER BY id DESC LIMIT 1",
+        [investigationId],
+      );
+      return rows[0] || null;
+    },
+
+    async loadTranscript(conversationId) {
+      const { db } = pools();
+      const { rows } = await db.query('SELECT pi_messages FROM dispute_automation.conversation_state WHERE conversation_id=$1', [conversationId]);
+      return Array.isArray(rows[0]?.pi_messages) ? rows[0].pi_messages : [];
+    },
+
+    async saveTranscript(conversationId, messages) {
+      const { db } = pools();
+      await db.query(
+        `INSERT INTO dispute_automation.conversation_state(conversation_id,pi_messages) VALUES($1,$2::jsonb)
+          ON CONFLICT (conversation_id) DO UPDATE SET pi_messages=EXCLUDED.pi_messages,updated_at=now()`,
+        [conversationId, JSON.stringify(messages)],
+      );
+    },
+
+    async countImages(conversationId) {
+      const { db } = pools();
+      const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM dispute_automation.evidence_images WHERE conversation_id=$1', [conversationId]);
+      return rows[0].n;
+    },
+
+    async saveImages(conversationId, caseId, images, expiresAt) {
+      const { db } = pools();
+      const ids = [];
+      for (const img of images) {
+        const { rows } = await db.query(
+          `INSERT INTO dispute_automation.evidence_images(conversation_id,case_id,mime,bytes,byte_size,expires_at)
+            VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+          [conversationId, caseId, img.mime, img.bytes, img.bytes.length, expiresAt],
+        );
+        ids.push(rows[0].id);
+      }
+      return ids;
+    },
+
+    async listImages(conversationId) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        'SELECT id,mime,byte_size,created_at,expires_at FROM dispute_automation.evidence_images WHERE conversation_id=$1 AND expires_at>now() ORDER BY id',
+        [conversationId],
+      );
+      return rows;
+    },
+
+    async loadImages(conversationId) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        'SELECT id,mime,bytes FROM dispute_automation.evidence_images WHERE conversation_id=$1 AND expires_at>now() ORDER BY id',
+        [conversationId],
+      );
+      return rows;
+    },
+
+    async getImage(conversationId, imageId) {
+      const { db } = pools();
+      try {
+        const { rows } = await db.query(
+          'SELECT mime,bytes FROM dispute_automation.evidence_images WHERE conversation_id=$1 AND id=$2 AND expires_at>now()',
+          [conversationId, imageId],
+        );
+        return rows[0] || null;
+      } catch (err) {
+        if (err && err.code === '22P02') return null;
+        throw err;
+      }
+    },
+
+    /** Deletes images past their expiry. Returns how many went. */
+    async purgeExpiredImages() {
+      const { db } = pools();
+      const r = await db.query('DELETE FROM dispute_automation.evidence_images WHERE expires_at<=now()');
+      return r.rowCount;
     },
 
     history: {

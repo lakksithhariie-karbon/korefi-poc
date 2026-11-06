@@ -1,5 +1,6 @@
 // End-to-end check: loads the built extension in Chromium, captures mock DoorDash pages, and drives the side panel
-// against a fake Pi backend that speaks the real async API (202 + polling).
+// against the REAL backend app (HTTP routes, validation, conversations, images) over in-memory storage,
+// with a fake agent that follows the same transcript contract as the Pi agent.
 // Run: PLAYWRIGHT_BROWSERS_PATH=$PWD/.browsers node e2e/run.mjs
 import { execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -7,6 +8,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { createApp } from '../agent-backend/src/app.mjs';
+import { createMemoryStore } from '../agent-backend/test/memory-store.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'e2e', 'out');
@@ -73,54 +76,35 @@ const makePortal = () =>
     res.end(pageFor(req.url));
   });
 
-// ---- fake Pi backend: same shape as the real service ----
-const pi = { bodies: [], confirms: [], wakes: 0, polls: new Map(), next: 1 };
+// ---- the real backend app over in-memory storage ----
+const TOKEN = 't'.repeat(40);
+const store = createMemoryStore();
+const agentCalls = []; // what the (fake) agent was handed on each turn
+const pi = { wakes: 0, bodies: [] };
+const backend = createApp({
+  store,
+  env: { KOREFI_AGENT_TOKEN: TOKEN, OPENAI_API_KEY: 'sk-test' },
+  log: () => {},
+  investigate: async ({ request, transcript, images }) => {
+    agentCalls.push({ request, transcript, images });
+    if (/FAIL/.test(request.operatorQuestion || '')) throw new Error('internal detail that must not leak');
+    const n = agentCalls.length;
+    return {
+      recommendation: 'needs_review',
+      reasoning_summary: `No history for this store. Missing item on order ${request.orderId}; I looked at ${images.length} image(s). Gather the POS ticket.`,
+      missing_evidence: ['POS ticket time'],
+      draft_text: `Order ${request.orderId}: we dispute the charge. [verify POS ticket time]`,
+      risk_notes: null,
+      suggested_followups: n === 1 ? ['What evidence is missing?', 'Check the food photo'] : [],
+      model: 'fake',
+      tools_used: [{ name: 'get_error_charges', count: 0 }],
+      transcript: [...transcript, { role: 'user', content: [{ type: 'text', text: request.operatorQuestion }] }, { role: 'assistant', content: [{ type: 'text', text: `answer ${n}` }], stopReason: 'stop' }],
+    };
+  },
+});
 const fakePi = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x');
-  const json = (code, data) => {
-    res.writeHead(code, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(data));
-  };
-  if (req.method === 'GET' && url.pathname === '/healthz') {
-    pi.wakes++;
-    return json(200, { ok: true });
-  }
-  if (req.headers.authorization !== `Bearer ${'t'.repeat(40)}`) return json(401, { error: 'Unauthorized' });
-  let raw = '';
-  req.on('data', (c) => (raw += c));
-  req.on('end', () => {
-    if (req.method === 'POST' && url.pathname === '/v1/investigations') {
-      const body = JSON.parse(raw);
-      pi.bodies.push({ raw, body });
-      const id = String(pi.next++);
-      pi.polls.set(id, { reads: 0, fail: /FAIL/.test(body.operator_question || ''), body });
-      return json(202, { investigation_id: id, case_id: 1, store_id: body.store_id || 'unresolved', order_id: body.order_id, status: 'running' });
-    }
-    const poll = url.pathname.match(/^\/v1\/investigations\/(\d+)$/);
-    if (req.method === 'GET' && poll) {
-      const job = pi.polls.get(poll[1]);
-      if (!job) return json(404, { error: 'Investigation not found' });
-      if (job.reads++ < 1) return json(200, { investigation_id: poll[1], status: 'running' });
-      if (job.fail) return json(200, { investigation_id: poll[1], status: 'failed', error: 'The investigation failed. Please try again.' });
-      return json(200, {
-        investigation_id: poll[1],
-        status: 'completed',
-        store_id: job.body.store_id || 'unresolved',
-        recommendation: 'needs_review',
-        reasoning_summary: `No history for this store. Missing item on order ${job.body.order_id}; gather the POS ticket.`,
-        missing_evidence: ['POS ticket time'],
-        draft_text: `Order ${job.body.order_id}: we dispute the charge. [verify POS ticket time]`,
-        risk_notes: null,
-        tools_used: [{ name: 'get_error_charges', count: 0 }],
-      });
-    }
-    if (req.method === 'POST' && url.pathname === '/v1/disputes/confirm') {
-      const body = JSON.parse(raw);
-      pi.confirms.push(body);
-      return json(200, { id: 'sub-1', case_id: 1, store_id: body.store_id || 'unresolved', submitted_at: body.disputed_at, already_recorded: false });
-    }
-    return json(404, { error: 'Not found' });
-  });
+  if (req.method === 'GET' && req.url === '/healthz') pi.wakes++;
+  backend.handler(req, res);
 });
 
 const listen = (s, host = 'localhost') => new Promise((r) => s.listen(0, host, () => r(s.address().port)));
@@ -243,7 +227,8 @@ try {
   check('no names in stored text or snapshot', !/Sam P|Dana K/.test(c1.redactedText + JSON.stringify(c1.snapshot)));
   writeFileSync(path.join(out, 'captured-full.jpg'), Buffer.from(c1.image.split(',')[1], 'base64'));
 
-  // 2. Panel: screenshot is attached; first message uploads it as slices and the answer streams in via polling.
+  // 2. Panel: the screenshot is attached; the first message opens a chat on the server and uploads the slices once.
+  panel.on('request', (r) => { if (r.method() === 'POST' && r.url().includes(`:${piPort}/`)) pi.bodies.push({ url: new URL(r.url()).pathname, raw: r.postData() || '' }); });
   await panel.waitForSelector('#attachment:not([hidden])');
   check('screenshot is attached to the composer', true);
   await panel.fill('#prompt', 'Can we dispute this?');
@@ -253,86 +238,134 @@ try {
     return t.includes('No history for this store') ? t : null;
   }, 40000);
   check('answer appears after polling', !!answer1);
-  const first = pi.bodies[0];
   check('woke the backend before investigating', pi.wakes >= 1);
-  check('request has no store ID and still works', first && first.body.store_id === null && first.body.order_id === '3990CBFD');
-  check('screenshot sent as JPEG slices', first && Array.isArray(first.body.screenshots) && first.body.screenshots.length >= 2 && first.body.screenshots.every((s) => s.startsWith('data:image/jpeg;base64,')), first && String(first.body.screenshots?.length));
-  check('first turn has no conversation', first && first.body.conversation.length === 0);
-  check('request contains no personal names', first && !/Sam P|Dana K/.test(first.raw));
-  check('item names reach the agent (not scrubbed)', first && /Wintermelon Lemon/.test(first.raw));
+  const opened = pi.bodies.find((b) => b.url === '/v1/conversations');
+  const openedBody = opened && JSON.parse(opened.raw);
+  check('chat is opened with the order and no store ID', !!openedBody && openedBody.order_id === '3990CBFD' && openedBody.store_id === null);
+  check('redacted screenshot slices uploaded once, as JPEG', !!openedBody && openedBody.screenshots.length >= 2 && openedBody.screenshots.every((x) => x.startsWith('data:image/jpeg;base64,')), String(openedBody?.screenshots?.length));
+  check('open request contains no personal names', !!opened && !/Sam P|Dana K/.test(opened.raw));
+  check('item names reach the agent (not scrubbed)', !!opened && /Wintermelon Lemon/.test(opened.raw));
+  const msg1 = pi.bodies.find((b) => b.url.endsWith('/messages'));
+  check('the message itself carries no images', !!msg1 && !('screenshots' in JSON.parse(msg1.raw)));
+  check('the server stored the chat, its images and both messages', store.conversations.length === 1 && store.images.length === openedBody.screenshots.length && store.messages.length === 2);
+  check('first turn: agent got the case facts and every image', agentCalls[0].transcript.length === 0 && agentCalls[0].images.length === openedBody.screenshots.length && agentCalls[0].request.issueCategory === 'Missing entire item', JSON.stringify(agentCalls[0].request.issueCategory));
   check('recommendation shown', (await panel.locator('.assessment .big').last().innerText()) === 'Needs review');
+  check('suggested questions come from the server', (await panel.locator('#suggestions button').allInnerTexts()).some((t) => /Check the food photo/.test(t)));
   await panel.screenshot({ path: path.join(out, 'panel-answer.png') });
 
-  // 3. Follow-up remembers the conversation and the draft, and keeps the screenshot in context.
-  await panel.fill('#prompt', 'What evidence is missing?');
-  await panel.press('#prompt', 'Enter');
-  await waitFor(() => pi.bodies.length > 1, 40000);
-  const second = pi.bodies[1];
-  check('follow-up carries the earlier turns', second && second.body.conversation.length === 2 && second.body.conversation[0].text === 'Can we dispute this?');
-  check('follow-up carries the current draft', second && /we dispute the charge/.test(second.body.previous_draft || ''));
-  check('follow-up keeps the screenshot in context', second && second.body.screenshots?.length >= 2);
+  // 3. A suggested question continues the same conversation: saved transcript, images attached again, draft carried.
+  await panel.locator('#suggestions button', { hasText: 'What evidence is missing?' }).click();
+  await waitFor(() => agentCalls.length > 1, 40000);
+  check('follow-up resumes the saved transcript', agentCalls[1]?.transcript.length === 2, String(agentCalls[1]?.transcript.length));
+  check('follow-up has the images again, without the panel re-uploading them', agentCalls[1]?.images.length === agentCalls[0].images.length && !('screenshots' in JSON.parse(pi.bodies.filter((b) => b.url.endsWith('/messages')).at(-1).raw)));
+  check('follow-up carries the operator draft', /we dispute the charge/.test(agentCalls[1]?.request.previousDraft || ''));
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 2);
 
-  // 4. Draft, copy, confirm: logging works with no store ID.
+  // 4. More evidence mid-chat: capturing the same order again adds to this chat instead of replacing it.
+  const imagesBefore = store.images.length;
+  const c1b = await capture(order, `http://localhost:${portalPort}/*`);
+  check('a second capture of the same order is taken', !!c1b);
+  await panel.waitForSelector('#attachment:not([hidden])');
+  check('the chat is kept when more evidence is captured', (await panel.locator('.agent-message').count()) >= 2 && store.conversations.length === 1);
+  await panel.fill('#prompt', 'Here is another look at the order');
+  await panel.press('#prompt', 'Enter');
+  await waitFor(() => agentCalls.length > 2, 40000);
+  const withMore = JSON.parse(pi.bodies.filter((b) => b.url.endsWith('/messages')).at(-1).raw);
+  check('new images and the new page text go with the message', withMore.screenshots?.length >= 2 && typeof withMore.additional_text === 'string' && withMore.additional_text.length > 0);
+  check('the agent sees old and new images together', agentCalls[2]?.images.length === store.images.length && store.images.length > imagesBefore);
+  await waitFor(async () => (await panel.locator('.agent-message').count()) >= 3);
+
+  // 5. Draft, copy, confirm: logged against the chat, with no store ID.
   await panel.click('[data-tab="draft"]');
   await panel.click('#copyDraft');
   await panel.waitForSelector('#confirm:not([hidden])');
   check('draft copied to clipboard', /we dispute the charge/.test(await panel.evaluate(() => window.__copied || '')));
   await panel.click('#yesFiled');
   const logged = await waitFor(async () => (await panel.locator('#filingTitle').innerText().catch(() => '')).includes('logged in KoreFi'));
-  check('filing is logged without a store ID', !!logged && pi.confirms.length === 1 && pi.confirms[0].store_id === null && pi.confirms[0].order_id === '3990CBFD', JSON.stringify(pi.confirms));
+  check('filing is logged against the chat without a store ID', !!logged && store.submissions.length === 1 && store.conversations[0].status === 'disputed', JSON.stringify(store.submissions.length));
+  check('the chat notes that it was marked disputed', store.messages.some((m) => m.role === 'system' && /Marked as disputed/.test(m.text)));
 
-  // 5. A layout the parser does not know, on an address the manifest does not list: still captured, still redacted.
+  // 6. Reopen the panel: the chat comes back from the server, evidence images included. History lists it.
   await openPanel();
+  await panel.waitForSelector('.agent-message');
+  check('reopening the panel restores the chat', (await panel.locator('.user-bubble .chat-text').count()) >= 3 && (await panel.locator('.agent-message').count()) >= 3);
+  check('evidence images are shown from the server', await panel.waitForSelector('.evidence-strip .strip-thumb img', { timeout: 15000 }).then(() => true, () => false));
+  check('a disputed chat shows its note', (await panel.locator('.system-note').allInnerTexts()).some((t) => /Marked as disputed/.test(t)));
+  await panel.click('#historyButton');
+  await panel.waitForSelector('.history-item');
+  check('history lists the chat with its status', (await panel.locator('.history-item').count()) === 1 && (await panel.locator('.history-chip.done').count()) === 1);
+  await panel.screenshot({ path: path.join(out, 'panel-history.png') });
+  await panel.click('#historyButton');
+
+  // 7. New chat on a different order, on an address the manifest does not list and a layout the parser does not know.
+  await panel.click('#newChat');
+  check('new chat starts empty', await panel.locator('#empty').isVisible() && (await panel.locator('.agent-message').count()) === 0);
   const changed = await context.newPage();
   await changed.goto(`http://127.0.0.1:${portal2Port}/changed?orderId=ZXCV9876&storeId=555123`);
   const c2 = await capture(changed, `http://127.0.0.1:${portal2Port}/*`);
-  check('unknown layout is still captured', !!c2 && c2.orderId === 'ZXCV9876', c2?.orderId);
-  check('store ID read from the address', c2?.storeId === '555123', String(c2?.storeId));
+  check('unknown layout is captured, store ID read from the address', !!c2 && c2.orderId === 'ZXCV9876' && c2.storeId === '555123', `${c2?.orderId} ${c2?.storeId}`);
   check('unknown layout screenshot is redacted', !!c2?.image && (await inspect(c2.image)).bands >= 1, String(c2?.imageNote));
-  check('unknown layout text has no names', !!c2 && !/Pat Q|Lee R/.test(c2.redactedText), c2?.redactedText.slice(0, 200));
+  check('unknown layout text has no names', !!c2 && !/Pat Q|Lee R/.test(c2.redactedText));
   await panel.waitForSelector('#attachment:not([hidden])');
   await panel.fill('#prompt', 'Check this one');
   await panel.press('#prompt', 'Enter');
-  await waitFor(() => pi.bodies.length > 2, 40000);
-  const third = pi.bodies[2];
-  check('store ID reaches the agent when known', third && third.body.store_id === '555123');
-  check('unknown layout request has no names', third && !/Pat Q|Lee R/.test(third.raw));
+  await waitFor(() => agentCalls.length > 3, 40000);
+  check('a second chat is opened with the known store ID', store.conversations.length === 2 && agentCalls[3].request.storeId === '555123');
+  check('the second chat starts a fresh conversation', agentCalls[3].transcript.length === 0);
+  check('second chat request has no names', !pi.bodies.filter((b) => b.url.startsWith('/v1/conversations')).some((b) => /Pat Q|Lee R/.test(b.raw)));
+  await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
 
-  // 6. A page with no sign of where personal details are: no screenshot at all, and nothing unredacted anywhere.
-  await openPanel();
+  // 8. History: newest first; open the older chat; it is disputed, so it stays read-only.
+  await panel.click('#historyButton');
+  await waitFor(async () => (await panel.locator('.history-item').count()) === 2);
+  const titles = await panel.locator('.history-title').allInnerTexts();
+  check('history shows both chats, newest first', titles.length === 2 && /ZXCV9876/.test(titles[0]) && /3990CBFD/.test(titles[1]), titles.join(' | '));
+  await panel.locator('.history-item', { hasText: '3990CBFD' }).click();
+  await panel.waitForSelector('.system-note');
+  check('opening an older chat shows its messages', (await panel.locator('.user-bubble .chat-text').first().innerText()) === 'Can we dispute this?');
+  await panel.fill('#prompt', 'One more thing');
+  await panel.press('#prompt', 'Enter');
+  check('a disputed chat does not take new questions', await waitFor(async () => /already marked as disputed/.test(await panel.locator('.agent-message .agent-text').last().innerText().catch(() => ''))) !== null);
+  check('no extra agent run was started', agentCalls.length === 4);
+
+  // 9. A page with no sign of where personal details are: no screenshot, a placeholder order ID, and the chat still works.
+  await panel.click('#newChat');
   const unknown = await context.newPage();
   await unknown.goto(`http://localhost:${portalPort}/unknown`);
   const c3 = await capture(unknown, `http://localhost:${portalPort}/unknown`);
   check('page with no redaction anchors is captured as data only', !!c3 && c3.image === null && /No screenshot/.test(c3.imageNote || ''), c3?.imageNote);
   check('placeholder order ID is used', !!c3 && c3.orderId.startsWith('SCREENSHOT-'), c3?.orderId);
-  const all = await getCases();
-  const leaks = [];
-  for (const c of all) if (c.image && (await inspect(c.image)).bands < 1) leaks.push(c.orderId);
-  check('no stored screenshot is unredacted', leaks.length === 0, leaks.join(','));
   await panel.waitForSelector('#caseMeta:not([hidden])');
   check('operator is asked for the order ID', true);
   check('no attachment when no screenshot', await panel.locator('#attachment').isHidden());
   await panel.fill('#prompt', 'Anything we can do?');
   await panel.press('#prompt', 'Enter');
-  await waitFor(() => pi.bodies.length > 3, 40000);
-  const fourth = pi.bodies[3];
-  check('data-only investigation sends no screenshot', fourth && !fourth.body.screenshots);
-  await panel.fill('#metaOrder', 'QWER4321');
-  await panel.fill('#metaStore', '246810');
-  await panel.click('#saveMeta');
-  const saved = await waitFor(async () => (await getCases())[0].orderId === 'QWER4321');
-  check('order and store IDs can be entered by hand', !!saved && (await getCases())[0].storeId === '246810');
+  await waitFor(() => agentCalls.length > 4, 40000);
+  check('data-only chat sends no images', agentCalls[4].images.length === 0 && store.conversations.at(-1) && store.images.filter((i) => i.conversation_id === store.conversations.at(-1).id).length === 0);
+  await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
 
-  // 7. A failed investigation explains itself.
-  await openPanel();
+  // 10. A failed run explains itself without leaking internals, and leaves a note in the chat.
   await panel.fill('#prompt', 'FAIL this one');
   await panel.press('#prompt', 'Enter');
   const failure = await waitFor(async () => {
     const t = await panel.locator('.agent-message .agent-text').last().innerText().catch(() => '');
     return /Please try again/.test(t) ? t : null;
   }, 40000);
-  check('failed investigation shows a clear message', !!failure);
+  check('failed run shows a clear message', !!failure);
+  check('internal error detail never reaches the panel or the chat', !/internal detail/.test(await panel.content()) && !store.messages.some((m) => /internal detail/.test(m.text)));
+  check('the failure is noted in the saved chat', store.messages.some((m) => m.role === 'system' && /could not answer/.test(m.text)));
+
+  // 11. No screenshot anywhere is unredacted: local cases, and the images the server holds.
+  const all = await getCases();
+  const leaks = [];
+  for (const c of all) if (c.image && (await inspect(c.image)).bands < 1) leaks.push(c.orderId);
+  check('no stored local screenshot is unredacted', leaks.length === 0, leaks.join(','));
+  const perChat = new Map();
+  for (const img of store.images) {
+    const info = await inspect(`data:${img.mime};base64,${Buffer.from(img.bytes).toString('base64')}`);
+    perChat.set(img.conversation_id, (perChat.get(img.conversation_id) || 0) + (info.bands > 0 ? 1 : 0));
+  }
+  check('each chat with images holds the blacked-out section on the server', [...perChat.values()].every((n) => n >= 1), JSON.stringify([...perChat]));
   await panel.screenshot({ path: path.join(out, 'panel-final.png') });
 } finally {
   await context.close();

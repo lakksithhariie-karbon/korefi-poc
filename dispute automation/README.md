@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.7
+# KoreFi Dispute Assistant v0.8
 
 A Chrome side-panel extension and a small agent service for DoorDash disputes. The operator opens an order in the
 DoorDash merchant portal, captures it, asks the agent what to do, edits the draft, **files the dispute in DoorDash
@@ -6,8 +6,8 @@ themselves**, and then confirms. Nothing is ever submitted to DoorDash by this s
 
 ```
 DoorDash tab ── capture (scroll, redact, stitch) ──► side panel ── Send ──► Pi agent service (Render) ──► Neon
-                                                         ▲                         │ 202 + poll
-                                                         └──────── answer + draft ◄┘
+                                                         ▲                    │  chat, images, transcript saved
+                                                         └─ answer + draft ◄──┘  agent resumes the same conversation
 ```
 
 ## Using it
@@ -16,6 +16,20 @@ DoorDash tab ── capture (scroll, redact, stitch) ──► side panel ──
 2. Open a DoorDash order, click the KoreFi icon on that tab. Open Settings (sun icon) once: agent URL, your agent token, operator ID.
 3. **+** captures the order. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** tab: edit, **Copy dispute**, file it in DoorDash, then **Yes, disputed** to log it.
+
+## What changed in v0.8: chats the server owns
+
+- **The conversation lives on the server.** The panel sends only the new message. The agent resumes the saved conversation
+  (its own transcript, tool results included) on every turn, so follow-ups remember what it already looked up.
+- **The agent always sees the images.** The redacted screenshot slices (and any extra evidence photos) are stored with the chat
+  and attached again on every turn, so a photo of the food can be judged on turn five as well as turn one. They are deleted after
+  `IMAGE_RETENTION_DAYS` (30). Chat text and transcripts never contain image data.
+- **History and new chat.** The clock button lists every chat, newest first, with its order, recommendation and whether it was
+  marked disputed. Open one on any device to read it, see its evidence images, and keep going. New chat starts blank.
+- **Capture again mid-chat** (**+** on the same order) adds new evidence to the chat instead of replacing it.
+- **Suggested questions come from the agent**, and **Mark as disputed** is a command the backend records, not something the model decides.
+- **No manual database step.** On startup the backend creates its own conversation tables (`db/migrations/001_conversations.sql`)
+  with its own database role. If that role is not allowed to create tables, chats answer with a plain 503 and everything else keeps working.
 
 ## What changed in v0.7
 
@@ -38,9 +52,10 @@ DoorDash tab ── capture (scroll, redact, stitch) ──► side panel ──
 src/background.ts        capture queue; scroll, screenshot, redact, stitch (fails closed)
 src/content/             page reader: parse, redaction regions, scrolling (runs only when asked)
 src/shared/              parser, rules, text scrubbing, store/order ID detection, storage
-src/sidepanel/           chat UI (app.js), markup, styles
+src/sidepanel/           chat UI (app.js), history, markup, styles
 agent-backend/           Node service: async investigations, Pi agent, Neon store
-db/schema.inferred.sql   tables reconstructed from the queries (NOT the live schema; verify against Neon)
+db/migrations/           SQL the backend applies to itself on startup (001: conversations, saved chat state, evidence images)
+db/schema.inferred.sql   older tables reconstructed from the queries (NOT the live schema; verify against Neon)
 e2e/run.mjs              real extension in Chromium against a mock portal and a fake Pi backend
 ```
 
@@ -48,15 +63,16 @@ e2e/run.mjs              real extension in Chromium against a mock portal and a 
 
 ```bash
 npm run typecheck
-npm test            # extension unit tests + backend tests (no database or model needed)
+npm test            # extension unit tests + backend tests (no database, model key or network needed)
 npm run e2e         # needs the Playwright browser in .browsers (npx playwright install chromium)
 ```
 
 ## What leaves the browser
 
 Only when you press Send: the parsed order facts (no customer or Dasher names), redacted page text, the redacted screenshot slices,
-the recent chat, and your draft. They go to your Pi agent service, which sends them to OpenAI. Cases and screenshots are kept in
-`chrome.storage.local`; the backend stores case facts, investigations and tool-call metadata, never image bytes.
+your message, and your draft. They go to your Pi agent service, which sends them to OpenAI. Captures are kept in
+`chrome.storage.local`. The backend stores the chat, the agent's transcript (including the records its tools returned),
+tool-call counts, and the redacted images for 30 days. Only images that were redacted in the browser are ever uploaded.
 
 ## Limits and open decisions
 

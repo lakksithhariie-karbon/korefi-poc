@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KoreFi Dispute Assistant",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Chat-first KoreFi dispute agent: capture a redacted DoorDash order, investigate with Pi, draft a response, and log what you filed.",
   "permissions": ["sidePanel", "storage", "unlimitedStorage", "activeTab", "scripting"],
   "host_permissions": ["https://*.doordash.com/*", "https://korefi-pi-dispute-agent.onrender.com/*"],

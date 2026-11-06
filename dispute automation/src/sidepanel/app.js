@@ -1,4 +1,4 @@
-/* KoreFi Dispute Assistant v0.6 · real Chrome capture + Pi backend.
+/* KoreFi Dispute Assistant v0.8 · Chrome capture + Pi agent chats owned by the server.
    No simulated AI answers, no automated DoorDash submission. */
 (() => {
   'use strict';
@@ -23,9 +23,10 @@
   let progressTimer = null;
   let progressStart = 0;
   let toastTimer = null;
-  let latestAssistantText = '';
-  let chat = [];
-  let shotSentFor = null;
+  // The chat lives on the server: the panel sends only the new message, and the agent continues the saved conversation.
+  let conversationId = null;
+  // The capture whose screenshot is attached to the next message. Null when nothing is attached.
+  let attachedCase = null;
   let metaOpen = false;
   let awakeAt = 0;
   let wakePromise = null;
@@ -67,17 +68,23 @@
   function showSettings(open){
     hide('settingsPanel',!open);
     $('settingsButton').setAttribute('aria-expanded',String(open));
-    if(open){$('agentUrl').value=settings.agentUrl||API;$('agentToken').value=settings.agentToken||'';
+    if(open){hide('historyPanel');$('agentUrl').value=settings.agentUrl||API;$('agentToken').value=settings.agentToken||'';
       $('operatorId').value=settings.operatorId||'poc-operator';}
     else focusComposer();
   }
-  function newChat(){
-    if(captureBusy){toast('Finish the current capture before starting another investigation.');return;}
-    current=null;analysis=null;draftText='';draftCopied=false;copiedText='';filing=null;attached=false;chat=[];shotSentFor=null;metaOpen=false;hide('caseMeta');
+  // Everything that belongs to one chat. A new chat, a different order, or an opened conversation all start from here.
+  function resetChatState(){
+    conversationId=null;analysis=null;draftText='';draftCopied=false;copiedText='';filing=null;attachedCase=null;attached=false;metaOpen=false;
     $thread.replaceChildren();$('evidenceView').replaceChildren();$('draftText').value='';
     hide('empty',false);hide('thread');hide('progress');hide('suggestions');hide('tabs');hide('attachment');hide('draftView');hide('evidenceView');
-    hide('confirm');hide('filingState');activeTab='answer';
-    $prompt.value='';$('contextLabel').textContent='DoorDash page';$('capture').classList.remove('captured');
+    hide('confirm');hide('filingState');hide('caseMeta');activeTab='answer';
+    $('capture').classList.remove('captured');$prompt.value='';$prompt.style.height='auto';
+  }
+  function newChat(){
+    if(captureBusy||busy){toast('Wait for the agent to finish before starting a new chat.');return;}
+    hide('historyPanel');
+    resetChatState();current=null;
+    $('contextLabel').textContent='DoorDash page';$prompt.placeholder='Ask about a DoorDash order…';
     updateSend();scrollMain(true);focusComposer();
   }
   function updateSend(){
@@ -105,19 +112,23 @@
     hide('empty');hide('thread',false);
     if(activeTab!=='answer')setTab('answer');
   }
-  function addUser(text,withAttachment=false){
+  function addUser(text,shotSrc=null){
     showThread();
     const el=document.createElement('div');el.className='user-line';
     const b=document.createElement('div');b.className='user-bubble';
-    if(withAttachment&&current){
+    if(shotSrc){
       const shot=document.createElement('div');shot.className='inline-snapshot';
       const media=document.createElement('div');media.className='shot-thumb';
-      if(current.image){const img=document.createElement('img');img.alt='Attached DoorDash screenshot';img.src=current.image;media.append(img);}
+      const img=document.createElement('img');img.alt='Attached DoorDash screenshot';img.src=shotSrc;media.append(img);
       const meta=document.createElement('div');const name=document.createElement('strong');name.textContent='DoorDash screenshot';
-      const small=document.createElement('small');small.textContent=String(current.orderId||'').startsWith('SCREENSHOT-')?'Attached to message':`Order ${current.orderId} · attached`;
+      const small=document.createElement('small');small.textContent=current&&!String(current.orderId||'').startsWith('SCREENSHOT-')?`Order ${current.orderId} · attached`:'Attached to message';
       meta.append(name,small);shot.append(media,meta);b.append(shot);
     }
     const span=document.createElement('span');span.className='chat-text';span.textContent=text;b.append(span);el.append(b);$thread.append(el);scrollMain();
+  }
+  function addNote(text){
+    showThread();
+    const el=document.createElement('div');el.className='system-note';el.textContent=text;$thread.append(el);scrollMain();
   }
   function addAssistant(text, type='simple'){
     showThread();
@@ -129,21 +140,20 @@
     return el;
   }
   function captureAttachment(){
-    if(!current)return;
-    attached=!!current.image;
-    if(attached){$('attachmentImage').src=current.image;
-      $('attachmentTitle').textContent=String(current.orderId||'').startsWith('SCREENSHOT-')?'DoorDash screenshot':`Order ${current.orderId}`;
+    attached=!!attachedCase?.image;
+    if(attached){$('attachmentImage').src=attachedCase.image;
+      $('attachmentTitle').textContent=String(attachedCase.orderId||'').startsWith('SCREENSHOT-')?'DoorDash screenshot':`Order ${attachedCase.orderId}`;
       hide('attachment',false);$('capture').classList.add('captured');
     }else{
       hide('attachment');$('capture').classList.remove('captured');
     }
-    $('contextLabel').textContent=String(current.orderId||'').startsWith('SCREENSHOT-')?'Page captured':`Order ${current.orderId}`;
-    $prompt.placeholder=attached?'Ask about the attached screenshot…':'Ask about this captured order…';
+    if(current)$('contextLabel').textContent=String(current.orderId||'').startsWith('SCREENSHOT-')?'Page captured':`Order ${current.orderId}`;
+    $prompt.placeholder=attached?'Ask about the attached screenshot…':(current?'Ask about this order…':'Ask about a DoorDash order…');
     updateSend();
   }
   function removeAttachment(){
-    attached=false;hide('attachment');$('capture').classList.remove('captured');
-    $prompt.placeholder=current?'Ask about this captured order…':'Ask about a DoorDash order…';updateSend();
+    attachedCase=null;attached=false;hide('attachment');$('capture').classList.remove('captured');
+    $prompt.placeholder=current?'Ask about this order…':'Ask about a DoorDash order…';updateSend();
   }
   async function allCases(){const r=await chrome.storage.local.get('cases');return Array.isArray(r.cases)?r.cases:[];}
   async function getCase(id){return (await allCases()).find(c=>c.id===id)||null;}
@@ -160,20 +170,19 @@
   }
   async function loadCase(c, fromCapture=false){
     if(!c)return;
-    const switched = !!current && current.id!==c.id;
-    if(switched){chat=[];shotSentFor=null;metaOpen=false;$thread.replaceChildren();hide('suggestions');hide('tabs');hide('progress');
-      hide('evidenceView');hide('draftView');hide('thread');hide('empty',false);activeTab='answer';}
+    // Capturing the same order again in the middle of a chat adds evidence to that chat instead of replacing it.
+    if(fromCapture&&conversationId&&current&&c.orderId===current.orderId){
+      attachedCase=c;captureAttachment();
+      await patchCase(c.id,{conversationId}).catch(()=>{});
+      toast(c.image?'Added to this chat. Send a message to show it to the agent.':(c.imageNote||'Page captured.')+' Send a message to share its text with the agent.');
+      return;
+    }
+    if(fromCapture||(current&&current.id!==c.id))resetChatState();
     current=c;analysis=c.assessment||null;filing=await findFiling(c);
     draftText=analysis?.draft_text||filing?.filing?.draft||'';draftCopied=false;copiedText='';
-    if(fromCapture){
-      // Capture is an attachment operation, not an automatic API call.
-      captureAttachment();
-      toast(current.image?'Screenshot captured and attached. Type a question and send.':(current.imageNote||'Page data captured.')+' You can still investigate.');
-    }else{
-      captureAttachment();
-      if(!c.image)removeAttachment();
-      $('contextLabel').textContent=String(c.orderId||'').startsWith('SCREENSHOT-')?'Page captured':`Order ${c.orderId}`;
-    }
+    attachedCase=c.image&&!c.conversationId?c:null;
+    captureAttachment();
+    if(fromCapture)toast(c.image?'Screenshot captured and attached. Type a question and send.':(c.imageNote||'Page data captured.')+' You can still investigate.');
     if(filing){renderFiling(filing);}
     caseMetaUI();
   }
@@ -263,11 +272,14 @@
     if(status===401)return 'Agent token was rejected. Update it in Settings.';
     if(status===429)return (d||'The agent is busy.')+(retry?` Try again in ${Math.max(1,Math.ceil(Number(retry)/60))} min.`:'');
     if(status===413)return 'The screenshot is too large to send. Capture the order again.';
+    if(status===409)return d||'The agent is still answering your last message.';
+    if(status===404)return d||'Not found on the server.';
+    if(status===500)return 'The agent hit an error. If chats were just switched on, the database migration may not have been applied yet.';
     if(status===503)return d||'The agent is not available right now. Try again shortly.';
-    return `Investigation failed (HTTP ${status})${d?': '+d:''}`;
+    return `Request failed (HTTP ${status})${d?': '+d:''}`;
   }
   async function piFetch(path,options={}){
-    const attempt=()=>fetch(piBase()+path,{...options,headers:piHeaders(),signal:AbortSignal.timeout(options.timeout||60000)});
+    const attempt=()=>fetch(piBase()+path,{method:options.method,body:options.body,headers:piHeaders(),signal:AbortSignal.timeout(options.timeout||60000)});
     let response;
     try{response=await attempt();}
     catch{await sleep(4000);try{response=await attempt();}catch{throw Error('Could not reach the KoreFi agent. Check your connection and the backend URL in Settings.');}}
@@ -297,32 +309,49 @@
     }
     throw Error('The investigation is taking longer than expected. Please send it again.');
   }
-  async function callPi(question,withScreenshot){
+  function caseFacts(c){
+    const facts=scrub(c.snapshot||{});
+    const reasons=(c.snapshot?.errorCharges||[]).map(x=>x.reason).filter(Boolean);
+    const amount=Number(c.facts?.errorTotal??c.snapshot?.errorChargeTotal);
+    return {platform:'doordash',operator_id:settings.operatorId||'poc-operator',
+      // A missing store ID is fine: the agent still investigates and drafts from the order and screenshot.
+      store_id:c.storeId||c.snapshot?.storeId||null,order_id:c.orderId,
+      order_url:/^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com\//i.test(c.url||'')?c.url:null,
+      issue_category:reasons[0]||null,issue_description:reasons.join('; ').slice(0,1800)||null,
+      dispute_amount:Number.isFinite(amount)?Math.abs(amount):null,
+      structured_facts:{...facts,extension_rule_estimate:scrub(c.facts||{})},
+      redacted_page_text:String(c.redactedText||'').slice(0,11000)||null,
+      capture_status:c.image?(c.imageNote?.includes('first ')?'partial':'complete'):'data_only'};
+  }
+  // Opens the chat on the server the first time something is sent. The redacted screenshot slices are uploaded once, here.
+  async function createConversation(shots){
+    const created=await (await piFetch('/v1/conversations',{method:'POST',body:JSON.stringify({...caseFacts(current),screenshots:shots}),timeout:90000})).json();
+    if(!created?.conversation_id)throw Error('The agent could not open a chat. Please try again.');
+    conversationId=String(created.conversation_id);
+    removeAttachment();
+    await patchCase(current.id,{conversationId}).catch(()=>{});
+  }
+  async function callPi(question){
     if(!current)throw Error('Capture an order before starting an investigation.');
     if(!ready())throw Error('Connect your Pi agent in Settings to investigate. Screenshot capture works offline.');
     endpointOrigin(settings.agentUrl.trim());
     await wake();
-    const facts=scrub(current.snapshot||{});
-    const reasons=(current.snapshot?.errorCharges||[]).map(x=>x.reason).filter(Boolean);
-    const amount=Number(current.facts?.errorTotal??current.snapshot?.errorChargeTotal);
-    const data={platform:'doordash',operator_id:settings.operatorId||'poc-operator',
-      // A missing store ID is fine: the agent still investigates and drafts from the order and screenshot.
-      store_id:current.storeId||current.snapshot?.storeId||null,order_id:current.orderId,
-      order_url:/^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com\//i.test(current.url||'')?current.url:null,
-      issue_category:reasons[0]||null,issue_description:reasons.join('; ').slice(0,1800)||null,
-      dispute_amount:Number.isFinite(amount)?Math.abs(amount):null,
-      structured_facts:{...facts,extension_rule_estimate:scrub(current.facts||{})},
-      redacted_page_text:String(current.redactedText||'').slice(0,11000)||null,
-      operator_question:String(question||'').slice(0,1200)||null,
-      conversation:chat.slice(-10),previous_draft:draftText.trim()||null,
-      capture_status:current.image?(current.imageNote?.includes('first ')?'partial':'complete'):'data_only'};
-    if(withScreenshot&&current.image)data.screenshots=await tileScreenshot(current.image);
-    const started=await (await piFetch('/v1/investigations',{method:'POST',body:JSON.stringify(data),timeout:90000})).json();
-    if(!started?.investigation_id)throw Error('The agent did not accept the investigation. Please try again.');
+    const shots=attachedCase?.image?await tileScreenshot(attachedCase.image):[];
+    const body={operator_id:settings.operatorId||'poc-operator',text:String(question||'').slice(0,1200),previous_draft:draftText.trim()||null};
+    if(!conversationId){
+      await createConversation(shots);
+    }else if(attachedCase){
+      // More evidence for a chat already under way: new images, plus the text of the new capture.
+      if(shots.length)body.screenshots=shots;
+      if(attachedCase.id!==current.id&&attachedCase.redactedText)body.additional_text=String(attachedCase.redactedText).slice(0,11000);
+    }
+    const started=await (await piFetch(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`,{method:'POST',body:JSON.stringify(body),timeout:90000})).json();
+    if(!started?.investigation_id)throw Error('The agent did not accept the message. Please try again.');
+    // The server has the images now. Taking the chip away stops a retry from uploading them twice.
+    removeAttachment();
     const result=await pollInvestigation(started.investigation_id);
     if(!['dispute','needs_review','do_not_dispute'].includes(result?.recommendation)||!Array.isArray(result.tools_used))
-      throw Error('Pi returned an incomplete investigation.');
-    if(data.screenshots)shotSentFor=current.id;
+      throw Error('Pi returned an incomplete answer.');
     return result;
   }
   function startProgress(){
@@ -333,23 +362,23 @@
     scrollMain();
   }
   function stopProgress(){clearInterval(progressTimer);progressTimer=null;hide('progress');}
-  function showSuggestions(){
-    const suggestions = analysis?.draft_text ? ['Review the dispute draft','What evidence is missing?','Find similar disputes'] :
-      ['Draft a dispute response','What evidence is missing?','Find similar disputes'];
+  const DEFAULT_FOLLOWUPS=['What evidence is missing?','Can you tighten the draft?','Find similar disputes'];
+  function showSuggestions(result){
+    const asked=(result?.suggested_followups||[]).filter(Boolean).slice(0,4);
+    const chips=(asked.length?asked:DEFAULT_FOLLOWUPS).map(text=>({text,run:()=>void send(text)}));
+    if(analysis?.draft_text)chips.unshift({text:'Review the dispute draft',run:()=>setTab('draft')});
+    if(!filing)chips.push({text:"I've filed it. Mark as disputed",run:()=>setTab('draft')});
     const el=$('suggestions');el.replaceChildren();
     const label=document.createElement('span');label.className='suggest-title';label.textContent='Continue investigating';el.append(label);
-    for(const text of suggestions){const b=document.createElement('button');b.type='button';b.innerHTML=`${icon('arrow',15)}<span>${esc(text)}</span>`;
-      b.addEventListener('click',()=>{
-        if(text==='Review the dispute draft'){setTab('draft');return;}
-        void send(text);
-      });el.append(b);}
+    for(const chip of chips){const b=document.createElement('button');b.type='button';b.innerHTML=`${icon('arrow',15)}<span>${esc(chip.text)}</span>`;
+      b.addEventListener('click',chip.run);el.append(b);}
     hide('suggestions',false);
   }
-  function addAnalysis(result){
-    analysis=result;latestAssistantText=result.reasoning_summary||'';
+  function fmtWhen(iso){try{return new Date(iso).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch{return '';}}
+  function renderAnalysisCard(result,when='Just now'){
     const label={dispute:'Consider disputing',needs_review:'Needs review',do_not_dispute:'Do not dispute'}[result.recommendation]||'Review';
     const el=document.createElement('article');el.className='agent-message';
-    const head=document.createElement('div');head.className='agent-head';head.innerHTML=`<span class="mini-logo">${icon('arrow',13)}</span><span class="agent-name">KoreFi AI</span><span class="agent-time">Just now</span>`;
+    const head=document.createElement('div');head.className='agent-head';head.innerHTML=`<span class="mini-logo">${icon('arrow',13)}</span><span class="agent-name">KoreFi AI</span><span class="agent-time">${esc(when)}</span>`;
     const p=document.createElement('p');p.className='agent-text';p.textContent=result.reasoning_summary||'No reason was provided.';
     const a=document.createElement('div');a.className='assessment';a.innerHTML=`<div class="label">RECOMMENDATION</div><div class="big">${esc(label)}</div>`;
     const missing=Array.isArray(result.missing_evidence)?result.missing_evidence:[];
@@ -362,22 +391,27 @@
     actions.querySelector('[data-evidence]').addEventListener('click',()=>setTab('evidence'));
     actions.querySelector('[data-draft]').addEventListener('click',()=>setTab('draft'));
     el.append(head,p,a,note,actions);$thread.append(el);
+    return el;
+  }
+  // The newest answer drives the Evidence and Draft tabs and the suggested next questions.
+  function applyAnalysis(result){
+    analysis=result;
     if(result.draft_text && !filing && (!draftText || !draftCopied)){
       draftText=result.draft_text;$('draftText').value=draftText;draftCopied=false;copiedText='';hide('confirm');
     }
-    hide('tabs',false);showSuggestions();scrollMain();
+    hide('tabs',false);showSuggestions(result);scrollMain();
   }
-  async function run(question, withScreenshot){
+  function addAnalysis(result){renderAnalysisCard(result);applyAnalysis(result);}
+  async function run(question){
     if(!current||busy)return;
     const caseId=current.id;
     busy=true;updateSend();showThread();hide('suggestions');toast('');startProgress();
     try{
-      const result=await callPi(question,withScreenshot);
+      const result=await callPi(question);
       if(current?.id!==caseId)return;
       stopProgress();addAnalysis(result);
-      chat.push({role:'user',text:String(question||'').slice(0,2500)},{role:'assistant',text:String(result.reasoning_summary||'').slice(0,2500)});
       awakeAt=Date.now();
-      await patchCase(caseId,{assessment:result,agentStoreId:result.store_id&&result.store_id!=='unresolved'?result.store_id:(current.storeId||null)});
+      await patchCase(caseId,{assessment:result,conversationId,agentStoreId:result.store_id&&result.store_id!=='unresolved'?result.store_id:(current.storeId||null)}).catch(()=>{});
     }catch(e){stopProgress();const msg=String(e.message||e);addAssistant(msg);toast(msg);}
     finally{busy=false;updateSend();stopProgress();scrollMain();}
   }
@@ -390,18 +424,16 @@
       addUser(question);addAssistant('Open a DoorDash order and tap + to capture it. I can investigate as soon as you attach the page.');
       $prompt.value='';updateSend();return;
     }
-    if(filing){addAssistant('This order has already been marked as disputed. Start a new investigation for another order.');return;}
+    if(filing){addAssistant('This chat is already marked as disputed. Start a new chat for another question.');return;}
     if(!ready()){
       toast('Connect Pi once to investigate. Your screenshot remains attached until you send it.');
       showSettings(true);return;
     }
-    const showShot=attached;
-    // The first message uploads the screenshot the operator attached; follow-ups in the same case keep it in context.
-    const withShot=attached||(shotSentFor===current.id&&!!current.image);
-    $prompt.value='';$prompt.style.height='auto';removeAttachment();
-    addUser(question,showShot);
+    const shotSrc=attachedCase?.image||null;
+    $prompt.value='';$prompt.style.height='auto';
+    addUser(question,shotSrc);
     if(activeTab!=='answer')setTab('answer');
-    await run(question,withShot);
+    await run(question);
   }
   function renderEvidence(){
     const root=$('evidenceView');root.replaceChildren();
@@ -447,14 +479,14 @@
   async function regenerateDraft(){
     if(!current||busy||filing)return;
     const text='Prepare a factual DoorDash dispute draft from the available evidence. Mark unsupported claims with [verify].';
-    addUser(text);setTab('answer');await run(text,shotSentFor===current.id&&!!current.image);
+    addUser(text);setTab('answer');await run(text);
     if(analysis?.draft_text){setTab('draft');}
   }
   async function syncFiling(record){
     if(!ready())return {state:'pending',error:'Pi connection missing. Saved in Chrome only.'};
     const url=settings.agentUrl.trim().replace(/\/+$/,'')+'/v1/disputes/confirm';endpointOrigin(url);
     const amount=Number(record.facts?.errorTotal);
-    const body={operator_id:settings.operatorId||'poc-operator',store_id:record.agentStoreId||record.storeId||null,
+    const body={operator_id:settings.operatorId||'poc-operator',conversation_id:record.conversationId||conversationId||null,store_id:record.agentStoreId||record.storeId||null,
       order_id:record.orderId,dispute_text:record.filing.draft,disputed_at:record.filing.confirmedAt,
       order_url:/^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com\//i.test(record.url||'')?record.url:null,
       dispute_amount:Number.isFinite(amount)?Math.abs(amount):null,
@@ -462,7 +494,7 @@
     const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${settings.agentToken.trim()}`},
       body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
     if(!response.ok){let message='';try{message=(await response.json())?.error||'';}catch{}
-      throw Error(describeHttp(response.status,message,response.headers.get('Retry-After')).replace(/^Investigation failed/,'Backend returned'));}
+      throw Error(describeHttp(response.status,message,response.headers.get('Retry-After')).replace(/^Request failed/,'Backend returned'));}
     const result=await response.json();
     if(!result?.id||!result?.case_id)throw Error('Backend did not confirm a persisted submission.');
     return {state:'synced',backendId:result.id,error:null};
@@ -500,6 +532,90 @@
     await pushFiling(rec);
     renderDraft();
   }
+  // ---- history: every chat on the server, newest first ----
+  async function imageDataUrl(convId,imageId){
+    const r=await fetch(`${piBase()}/v1/conversations/${encodeURIComponent(convId)}/images/${encodeURIComponent(imageId)}`,{headers:{'Authorization':`Bearer ${settings.agentToken.trim()}`},signal:AbortSignal.timeout(30000)});
+    if(!r.ok)throw Error('Image unavailable');
+    const blob=await r.blob();
+    return await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(blob);});
+  }
+  async function localCaseFor(conv){
+    const found=(await allCases()).find(c=>c.conversationId===String(conv.id));
+    if(found)return found;
+    // Opened on a browser that never captured this order: keep a minimal local record so drafting and logging work here too.
+    const rec={id:`conv-${conv.id}`,orderId:conv.order_id,storeId:conv.store_id&&conv.store_id!=='unresolved'?conv.store_id:null,conversationId:String(conv.id),
+      createdAt:conv.created_at,trigger:'manual',url:'',snapshot:{orderId:conv.order_id,errorCharges:[],errorChargeTotal:null,disputeStatus:null},redactedText:'',
+      image:null,imageNote:null,facts:{errorTotal:Number(conv.error_amount)||0,deadlineIso:null,daysLeft:null,expired:false,decided:false,openErrorCharges:[],faultHint:null},assessment:null,status:'new'};
+    const cases=await allCases();const rest=cases.filter(c=>c.id!==rec.id);
+    await chrome.storage.local.set({cases:[rec,...rest].slice(0,120)});
+    return rec;
+  }
+  async function openConversation(id){
+    if(busy||captureBusy){toast('Wait for the agent to finish first.');return;}
+    const detail=await (await piFetch(`/v1/conversations/${encodeURIComponent(id)}`,{timeout:30000})).json();
+    const conv=detail.conversation;
+    resetChatState();
+    conversationId=String(conv.id);
+    current=await localCaseFor(conv);
+    const local=current.filing?.confirmedAt?current:null;
+    filing=local||(conv.status==='disputed'?{id:current.id,filing:{confirmedAt:conv.updated_at,draft:'',syncState:'synced',syncError:null}}:null);
+    hide('historyPanel');showThread();
+    // Evidence images saved with the chat, for review on any device.
+    if(detail.images?.length){
+      const strip=document.createElement('div');strip.className='evidence-strip';
+      const label=document.createElement('span');label.textContent=`${detail.images.length} evidence image${detail.images.length===1?'':'s'}`;strip.append(label);
+      $thread.append(strip);
+      for(const image of detail.images){
+        const b=document.createElement('button');b.type='button';b.className='strip-thumb';b.title='View image';strip.append(b);
+        imageDataUrl(conv.id,image.id).then(src=>{const img=document.createElement('img');img.alt='Evidence image';img.src=src;b.append(img);b.addEventListener('click',()=>openLightbox(src));}).catch(()=>b.remove());
+      }
+    }
+    let last=null;
+    for(const m of detail.messages){
+      if(m.role==='user')addUser(m.text);
+      else if(m.role==='assistant'){last=m.result||{recommendation:'needs_review',reasoning_summary:m.text,tools_used:[],missing_evidence:[]};renderAnalysisCard(last,fmtWhen(m.created_at));}
+      else addNote(m.text);
+    }
+    draftText=last?.draft_text||'';draftCopied=false;copiedText='';
+    if(last)applyAnalysis(last);else hide('tabs',false);
+    if(filing)renderFiling(filing);
+    attachedCase=null;captureAttachment();caseMetaUI();
+    if(detail.running){busy=true;updateSend();startProgress();void watchRunning(conv.id);}
+    scrollMain();
+  }
+  // A message sent from another window or before a reload may still be running. Wait for it, then show the answer.
+  async function watchRunning(id){
+    const deadline=Date.now()+240000;
+    while(Date.now()<deadline){
+      await sleep(3000);
+      try{const d=await (await piFetch(`/v1/conversations/${encodeURIComponent(id)}`,{timeout:20000})).json();
+        if(!d.running){busy=false;stopProgress();updateSend();await openConversation(id);return;}
+      }catch{}
+    }
+    busy=false;stopProgress();updateSend();toast('The agent is taking longer than expected. Reopen the chat in a minute.');
+  }
+  function renderHistory(list){
+    const root=$('historyList');root.replaceChildren();
+    if(!list.length){const p=document.createElement('p');p.className='section-lead';p.textContent='No chats yet. Capture a DoorDash order and ask a question to start one.';root.append(p);return;}
+    const label={dispute:'Consider disputing',needs_review:'Needs review',do_not_dispute:'Do not dispute'};
+    for(const c of list){
+      const b=document.createElement('button');b.type='button';b.className='history-item';if(c.id===conversationId)b.classList.add('current');
+      const chips=[];
+      if(c.status==='disputed')chips.push('<span class="history-chip done">Disputed</span>');
+      if(c.last_recommendation)chips.push(`<span class="history-chip">${esc(label[c.last_recommendation]||c.last_recommendation)}</span>`);
+      b.innerHTML=`<span class="history-title">${esc(c.title||('Order '+c.order_id))}</span><span class="history-meta">Order ${esc(c.order_id)} · ${esc(fmtWhen(c.updated_at))}${c.created_by?' · '+esc(c.created_by):''}</span><span class="history-chips">${chips.join('')}</span>`;
+      b.addEventListener('click',()=>void openConversation(c.id).catch(e=>toast(String(e.message||e))));
+      root.append(b);
+    }
+  }
+  async function openHistory(){
+    hide('settingsPanel');hide('historyPanel',false);
+    const root=$('historyList');
+    if(!ready()){root.innerHTML='<p class="section-lead">Connect your Pi agent in Settings to see your chats.</p>';return;}
+    root.innerHTML='<p class="section-lead">Loading chats…</p>';
+    try{await wake();const data=await (await piFetch('/v1/conversations?limit=50',{timeout:60000})).json();renderHistory(data.conversations||[]);}
+    catch(e){root.innerHTML='';const p=document.createElement('p');p.className='section-lead';p.textContent=String(e.message||e);root.append(p);}
+  }
   async function saveSettings(){
     const url=$('agentUrl').value.trim()||API,token=$('agentToken').value.trim();
     const operatorId=$('operatorId').value.trim()||'poc-operator';
@@ -515,11 +631,13 @@
       toast(token?'Pi credentials saved. You can investigate now.':'Settings saved. Capture works without Pi.');
     }catch(e){toast(String(e.message||e));}
   }
-  function openLightbox(){if(!current?.image)return;$('lightboxImage').src=current.image;hide('lightbox',false);$('closeLightbox').focus();}
+  function openLightbox(src){if(!src)return;$('lightboxImage').src=src;hide('lightbox',false);$('closeLightbox').focus();}
   function closeLightbox(){hide('lightbox');focusComposer();}
 
   $('officialLogo').addEventListener('error',()=>{hide('officialLogo');hide('logoFallback',false);});
   $('newChat').addEventListener('click',newChat);
+  $('historyButton').addEventListener('click',()=>{if($('historyPanel').hidden)void openHistory();else hide('historyPanel');});
+  $('closeHistory').addEventListener('click',()=>hide('historyPanel'));
   $('settingsButton').addEventListener('click',()=>showSettings($('settingsPanel').hidden));
   $('connectionButton').addEventListener('click',()=>showSettings(true));
   $('closeSettings').addEventListener('click',()=>showSettings(false));
@@ -532,10 +650,10 @@
   ctx.setAttribute('role','button');ctx.setAttribute('tabindex','0');ctx.style.cursor='pointer';ctx.title='Order and store ID';
   const toggleMeta=()=>{if(!current)return;metaOpen=!metaOpen;caseMetaUI();};
   ctx.addEventListener('click',toggleMeta);ctx.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleMeta();}});
-  $('viewAttachment').addEventListener('click',openLightbox);
+  $('viewAttachment').addEventListener('click',()=>openLightbox(attachedCase?.image));
   $('closeLightbox').addEventListener('click',closeLightbox);
   $('lightbox').addEventListener('click',e=>{if(e.target===e.currentTarget)closeLightbox();});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('lightbox').hidden)closeLightbox();else if(!$('settingsPanel').hidden)showSettings(false);}});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('lightbox').hidden)closeLightbox();else if(!$('historyPanel').hidden)hide('historyPanel');else if(!$('settingsPanel').hidden)showSettings(false);}});
   $('chatForm').addEventListener('submit',e=>{e.preventDefault();void send();});
   $prompt.addEventListener('input',()=>{$prompt.style.height='auto';$prompt.style.height=Math.max(43,Math.min($prompt.scrollHeight,115))+'px';updateSend();});
   $prompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('chatForm').requestSubmit();}});
@@ -570,7 +688,13 @@
     delete settings.apiKey;delete settings.loggingToken;delete settings.loggingUrl;delete settings.model;
     theme(settings.theme||'dark');connectionUI();if(ready())void wake();
     const cases=Array.isArray(data.cases)?data.cases:[];
-    if(cases.length){await loadCase(cases[0],false);}
+    if(cases.length){
+      const latest=cases[0];
+      // Reopen the chat you were in. If it cannot be reached, fall back to the captured order.
+      if(latest.conversationId&&ready()){
+        try{await openConversation(latest.conversationId);}catch{await loadCase(latest,false);}
+      }else await loadCase(latest,false);
+    }
     updateSend();
   }
   void init().catch(e=>toast(`Could not initialize: ${String(e.message||e)}`));

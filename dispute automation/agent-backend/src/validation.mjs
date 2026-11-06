@@ -107,9 +107,35 @@ export function sanitizeCapture(x) {
   };
 }
 
+/** A database id as it appears in a URL or body. */
+export function idParam(v, name = 'id') {
+  const s = typeof v === 'number' ? String(v) : v;
+  if (typeof s !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(s)) throw new HttpError(422, 'Invalid ' + name);
+  return s;
+}
+
+/** Starts a chat about an order. The same facts a first investigation carries, but no question yet. */
+export function sanitizeConversationStart(x) {
+  const c = sanitizeCapture({ ...(x && typeof x === 'object' ? x : {}), operator_question: null, conversation: null, previous_draft: null });
+  const title = optionalString(x.title, 120);
+  return { ...c, title };
+}
+
+/** One message in a chat. It may bring new evidence: extra images, or the text of a fresh capture. */
+export function sanitizeMessage(x) {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) throw new HttpError(422, 'Expected object');
+  return {
+    text: requiredString(x.text, 'text', 1200),
+    screenshots: screenshots(x),
+    additionalText: optionalString(x.additional_text, 12000),
+    previousDraft: optionalString(x.previous_draft, 6000),
+  };
+}
+
 export function sanitizeConfirm(x) {
   if (!x || typeof x !== 'object' || Array.isArray(x)) throw new HttpError(422, 'Expected object');
   return {
+    conversationId: x.conversation_id === undefined || x.conversation_id === null ? null : idParam(x.conversation_id, 'conversation_id'),
     storeId: validateStore(optionalString(x.store_id, 128)),
     orderId: orderId(x.order_id),
     disputeText: requiredString(x.dispute_text, 'dispute_text', 6000),
@@ -148,6 +174,7 @@ export function parseAgentOutput(text) {
       reasoning_summary: raw.slice(0, 5000),
       draft_text: '',
       missing_evidence: [],
+      suggested_followups: [],
       risk_notes: 'The agent did not return a structured assessment. Read the answer and verify it.',
     };
   }
@@ -156,6 +183,9 @@ export function parseAgentOutput(text) {
     reasoning_summary: x.reasoning_summary.slice(0, 5000),
     draft_text: typeof x.draft_text === 'string' ? x.draft_text.slice(0, 6000) : '',
     missing_evidence: Array.isArray(x.missing_evidence) ? x.missing_evidence.filter((y) => typeof y === 'string').slice(0, 15) : [],
+    suggested_followups: Array.isArray(x.suggested_followups)
+      ? x.suggested_followups.filter((y) => typeof y === 'string' && y.trim()).map((y) => y.trim().slice(0, 90)).slice(0, 4)
+      : [],
     risk_notes: typeof x.risk_notes === 'string' ? x.risk_notes.slice(0, 2000) : null,
   };
 }

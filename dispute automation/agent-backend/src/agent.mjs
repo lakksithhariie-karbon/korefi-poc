@@ -3,7 +3,8 @@ import { createModels } from '@earendil-works/pi-ai';
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
 import { obj } from '@earendil-works/pi-schema';
 import { UNRESOLVED_STORE } from './constants.mjs';
-import { buildPrompt } from './prompt.mjs';
+import { buildFollowUpPrompt, buildPrompt } from './prompt.mjs';
+import { exportTranscript, isFirstTurn } from './transcript.mjs';
 import { HttpError, parseAgentOutput } from './validation.mjs';
 
 export const INSTRUCTIONS =
@@ -18,12 +19,14 @@ export const INSTRUCTIONS =
   'Historic issue frequency is not a win rate; if outcomes are unknown, say they are unknown. ' +
   'Never file anything in DoorDash. The operator files it. Deadlines must be verified in DoorDash. ' +
   'If the evidence is thin, recommend needs_review and list exactly what to gather. ' +
+  'The images are evidence. Look at them closely, including any photo of the food or packaging, and say what you can and cannot see. Never describe something you cannot see. ' +
   'On a first turn, use the tools before answering. On a follow-up turn, answer from the conversation and call tools only for new facts. ' +
   'Your final response must be ONLY valid JSON, no markdown fences, with: ' +
   "recommendation ('dispute','needs_review','do_not_dispute'), " +
   'reasoning_summary (the message the operator reads in chat: plain text, short paragraphs, under 220 words unless asked for more, answering the latest question directly), ' +
   'missing_evidence (array of strings), ' +
   'draft_text (the complete, editable dispute text to paste into DoorDash, with [verify] placeholders for anything unproven; if the operator already has a draft, return the full revised draft only when they asked you to change it, otherwise return it unchanged), ' +
+  'suggested_followups (up to 4 short questions the operator might ask next, each under 60 characters, chosen for this case), ' +
   'risk_notes (string).';
 
 const NO_STORE_NOTE =
@@ -55,13 +58,27 @@ function toImages(screenshots) {
   return images;
 }
 
-export async function investigate({ store, tenant, request, runId, env = process.env }) {
-  if (!env.OPENAI_API_KEY) throw new HttpError(503, 'OPENAI_API_KEY missing');
-  const models = createModels();
-  models.setProvider(openaiProvider());
+/**
+ * One turn. For a saved conversation the caller passes the stored `transcript` and the stored `images`; the agent
+ * resumes from them and the new transcript comes back for the caller to save. Without a transcript this is the old
+ * stateless call, with history replayed from `request.conversation` and images from `request.screenshots`.
+ */
+export async function investigate({ store, tenant, request, runId, env = process.env, transcript = null, images = null, streamFn = null }) {
   const modelId = env.OPENAI_MODEL || 'gpt-4.1-mini';
-  const model = models.getModel('openai', modelId);
-  if (!model) throw new HttpError(503, 'Model unavailable in Pi model catalog: ' + modelId);
+  let model;
+  let stream;
+  if (streamFn) {
+    // Tests drive the real agent code with a fake model through this hook. Production never passes it.
+    model = { id: modelId, name: modelId, api: 'openai-responses', provider: 'openai', baseUrl: 'http://invalid', reasoning: false, input: ['text', 'image'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4000 };
+    stream = streamFn;
+  } else {
+    if (!env.OPENAI_API_KEY) throw new HttpError(503, 'OPENAI_API_KEY missing');
+    const models = createModels();
+    models.setProvider(openaiProvider());
+    model = models.getModel('openai', modelId);
+    if (!model) throw new HttpError(503, 'Model unavailable in Pi model catalog: ' + modelId);
+    stream = models.streamSimple.bind(models);
+  }
 
   const noStore = request.storeId === UNRESOLVED_STORE;
   const note = noStore ? NO_STORE_NOTE : NO_ROWS_NOTE;
@@ -81,9 +98,11 @@ export async function investigate({ store, tenant, request, runId, env = process
       noStore ? none : () => h.similarCases(tenant, request.storeId, request.issueCategory, request.orderId), toolTrace, note),
   ];
 
+  const resuming = Array.isArray(transcript);
+  const first = resuming ? isFirstTurn(transcript) : request.conversation.length === 0;
   const agent = new Agent({
-    initialState: { systemPrompt: INSTRUCTIONS, model, tools, thinkingLevel: 'low' },
-    streamFn: models.streamSimple.bind(models),
+    initialState: { systemPrompt: INSTRUCTIONS, model, tools, thinkingLevel: 'low', ...(resuming && !first ? { messages: transcript } : {}) },
+    streamFn: stream,
     toolExecution: 'sequential',
   });
 
@@ -105,14 +124,25 @@ export async function investigate({ store, tenant, request, runId, env = process
 
   const timeout = setTimeout(() => agent.abort(), 75000);
   try {
-    await agent.prompt(buildPrompt(request), toImages(request.screenshots));
+    const attached = images ?? toImages(request.screenshots);
+    const prompt =
+      resuming && !first
+        ? buildFollowUpPrompt({
+            question: request.operatorQuestion,
+            previousDraft: request.previousDraft,
+            additionalText: request.additionalText,
+            imageCount: attached.length,
+            storeId: request.storeId,
+          })
+        : buildPrompt({ ...request, screenshots: attached });
+    await agent.prompt(prompt, attached);
     const last = [...agent.state.messages].reverse().find((m) => m.role === 'assistant' && Array.isArray(m.content));
     const text = last?.content?.filter((c) => c.type === 'text').map((c) => c.text).join('\n') || '';
     const out = parseAgentOutput(text);
-    if (!toolTrace.length && request.conversation.length === 0) {
+    if (!toolTrace.length && first) {
       out.risk_notes = [out.risk_notes, 'No database lookup was made for this answer.'].filter(Boolean).join(' ');
     }
-    return { ...out, model: modelId, tools_used: toolTrace };
+    return { ...out, model: modelId, tools_used: toolTrace, transcript: resuming ? exportTranscript(agent.state.messages) : null };
   } finally {
     clearTimeout(timeout);
     agent.abort();

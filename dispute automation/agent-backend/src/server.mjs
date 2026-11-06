@@ -1,10 +1,14 @@
 import http from 'node:http';
-import { createApp } from './app.mjs';
+import { createApp, startMaintenance } from './app.mjs';
 import { createPgStore } from './data.mjs';
 import { investigate } from './agent.mjs';
 
 const PORT = Number(process.env.PORT || 10000);
-const app = createApp({ store: createPgStore(process.env), investigate, env: process.env });
+const store = createPgStore(process.env);
+const app = createApp({ store, investigate, env: process.env });
+// Create the conversation tables with this service's own role if they are missing. Never blocks or crashes the boot.
+await store.ensureConversations();
+startMaintenance({ store });
 
 const server = http.createServer(app.handler);
 server.requestTimeout = 90000;

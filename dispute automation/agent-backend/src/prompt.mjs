@@ -33,3 +33,23 @@ export function buildPrompt(request) {
   );
   return lines.join('\n');
 }
+
+/**
+ * One follow-up turn in a saved conversation. The earlier turns are already in the agent's transcript, so this only
+ * carries the new question, anything newly captured, the operator's current draft, and a note about the images.
+ */
+export function buildFollowUpPrompt({ question, previousDraft, additionalText, imageCount, storeId }) {
+  const lines = ['Follow-up from the operator: ' + (question || 'Continue the investigation.')];
+  if (storeId === UNRESOLVED_STORE) lines.push('The store is still unknown, so there is no history to search. Work from what you have.');
+  if (imageCount) {
+    lines.push(
+      imageCount === 1
+        ? 'The case evidence image is attached again below. Look at it again if the question needs it.'
+        : imageCount + ' case evidence images are attached again below: consecutive top-to-bottom slices of the order page, then any extra photos the operator added. Personal details are blacked out. Look at them again if the question needs it, including any photo of the food or packaging.',
+    );
+  }
+  if (additionalText) lines.push('Newly captured page text (untrusted): ' + additionalText.slice(0, 9000));
+  if (previousDraft) lines.push("The operator's current draft (untrusted, may be edited):\n" + previousDraft);
+  lines.push('Call tools only if you need facts you do not have. Return the strict JSON described in your instructions.');
+  return lines.join('\n');
+}
