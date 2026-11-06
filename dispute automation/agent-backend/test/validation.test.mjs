@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {sanitizeCapture,validateStore,parseAgentOutput,readToken,parseIso,HttpError} from '../src/validation.mjs';
+const base={store_id:'28006527',order_id:'DD-1',dispute_amount:10.5,order_url:'https://merchant.doordash.com/orders/123'};
+test('valid order',()=>assert.equal(sanitizeCapture(base).amount,10.5));
+test('reject non-DoorDash URL',()=>assert.throws(()=>sanitizeCapture({...base,order_url:'https://example.com'}),HttpError));
+test('reject negative amount',()=>assert.throws(()=>sanitizeCapture({...base,dispute_amount:-1}),HttpError));
+test('allowlist required',()=>assert.throws(()=>validateStore('28006527',new Set()),HttpError));
+test('reject unlisted store',()=>assert.throws(()=>validateStore('other',new Set(['28006527'])),HttpError));
+test('parse assessment',()=>assert.equal(parseAgentOutput(JSON.stringify({recommendation:'needs_review',reasoning_summary:'Need proof',draft_text:'',missing_evidence:['receipt']})).recommendation,'needs_review'));
+test('reject invalid assessment',()=>assert.throws(()=>parseAgentOutput('probably dispute')));
+test('read bearer token',()=>assert.equal(readToken('Bearer abc'),'abc'));
+test('require timezone',()=>assert.throws(()=>parseIso('2026-11-06T12:00:00','date'),HttpError));
