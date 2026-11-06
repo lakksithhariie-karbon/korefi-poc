@@ -197,8 +197,19 @@
       <div class="ops-footer"><label>Operator name (stored on this browser)<input id="ops-user" type="text" maxlength="80" placeholder="Enter your name"></label><p>Local pilot only. No cross-device sync, centralized audit or automatic filing.</p></div>`;
     const caseMain=$$('cases');caseMain.insertAdjacentElement('afterend',ops);
     const tab=document.createElement('button');tab.type='button';tab.dataset.tab='ops';tab.setAttribute('role','tab');tab.setAttribute('aria-selected','false');tab.textContent='Ops Queue';document.querySelector('.tabs').append(tab);
-    // Original side-panel tabs own Chat/Cases; this listener only toggles our separate surface.
-    document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {ops.hidden=b.dataset.tab!=='ops'; if (b.dataset.tab==='ops') void load();}));
+    // Existing Chat/Cases listeners were installed before this tab existed.
+    // Switch all surfaces explicitly for Ops, and respect programmatic navigation back to Chat.
+    tab.addEventListener('click', () => {
+      $('chat').hidden = true;
+      $('cases').hidden = true;
+      ops.hidden = false;
+      document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b === tab)));
+      void load();
+    });
+    document.querySelectorAll('.tabs button:not([data-tab="ops"])').forEach(b => b.addEventListener('click', () => { ops.hidden = true; }));
+    const sync = () => { if (!$('chat').hidden || !$('cases').hidden) ops.hidden = true; };
+    new MutationObserver(sync).observe($('chat'), {attributes:true,attributeFilter:['hidden']});
+    new MutationObserver(sync).observe($('cases'), {attributes:true,attributeFilter:['hidden']});
     $$('ops-query').addEventListener('input', e=>{search=e.target.value.toLowerCase().trim();render();});
     $$('ops-filter').addEventListener('change',e=>{filter=e.target.value;render();});
     $$('ops-export').addEventListener('click',exportCsv);
