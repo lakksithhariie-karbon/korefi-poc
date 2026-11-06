@@ -81,13 +81,21 @@ export interface FramePayload {
   viewport: Viewport;
 }
 
+/** What the page reader found on an order sheet the parser understands. Contains no customer or Dasher names. */
 export interface PagePayload {
   url: string;
   snapshot: OrderSnapshot;
   redactedText: string;
-  /** Regions (viewport CSS px) covering personal details. Null when they could not be located. */
-  rects: Rect[] | null;
-  viewport: Viewport;
+}
+
+/** What the page reader can say about any DoorDash page, even one the parser does not understand. */
+export interface CaptureContext {
+  orderId: string | null;
+  storeId: string | null;
+  title: string;
+  url: string;
+  /** Page text with personal details removed. */
+  safeText: string;
 }
 
 export interface RuleFacts {
@@ -105,37 +113,25 @@ export type CaseStatus = 'new' | 'filed' | 'skipped' | 'won' | 'lost';
 export interface CaseRecord {
   id: string;
   orderId: string;
+  /** DoorDash store ID when the page revealed it. Investigations work without it. */
+  storeId: string | null;
   createdAt: string;
-  trigger: 'auto' | 'manual';
+  trigger: 'manual';
   url: string;
   snapshot: OrderSnapshot;
   redactedText: string;
-  /** Redacted JPEG data URL, absent when redaction could not be guaranteed. */
+  /** Redacted JPEG data URL. Absent when personal details could not be hidden, in which case no screenshot is taken. */
   image: string | null;
   imageNote: string | null;
   facts: RuleFacts;
-  assessment: string | null;
+  assessment: unknown | null;
   status: CaseStatus;
 }
 
-export interface Settings {
-  apiKey: string;
-  model: string;
-  baseUrl: string;
-  captureEnabled: boolean;
-}
-
-export const DEFAULT_SETTINGS: Settings = {
-  apiKey: '',
-  model: '',
-  baseUrl: '',
-  captureEnabled: false,
-};
-
 export type RuntimeMessage =
-  | { type: 'ORDER_DETECTED'; payload: PagePayload }
   | { type: 'CAPTURE_NOW'; tabId: number }
   | { type: 'CASE_CAPTURED'; caseId: string }
   | { type: 'CAPTURE_FAILED'; reason: string }
   | { type: 'GET_PAYLOAD' }
+  | { type: 'GET_CAPTURE_CONTEXT' }
   | { type: 'SCROLL_FRAME'; top: number | null };

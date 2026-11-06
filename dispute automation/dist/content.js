@@ -221,9 +221,89 @@
     return out;
   }
 
+  // src/shared/ids.ts
+  var STORE_PARAMS = ["store_id", "storeId", "storeid", "store", "merchant_store_id"];
+  var ORDER_PARAMS = ["order_id", "orderId", "orderid", "order"];
+  function params(url) {
+    try {
+      const u = new URL(url);
+      const hash = u.hash.includes("?") ? new URLSearchParams(u.hash.slice(u.hash.indexOf("?") + 1)) : null;
+      const merged = new URLSearchParams(u.search);
+      hash?.forEach((v, k) => merged.append(k, v));
+      return merged;
+    } catch {
+      return new URLSearchParams();
+    }
+  }
+  function findStoreId(url, text) {
+    const path = url.match(/\/stores?\/(\d{3,32})(?:[/?#]|$)/i)?.[1];
+    if (path) return path;
+    const q = params(url);
+    for (const key of STORE_PARAMS) {
+      const v = q.get(key);
+      if (v && /^\d{3,32}$/.test(v)) return v;
+    }
+    return text.match(/\bStore\s*(?:ID|#|number)\s*[:#]?\s*(\d{3,32})\b/i)?.[1] ?? null;
+  }
+  function findOrderId(url, text) {
+    const fromText = text.match(/(?:^|\n)\s*Order:\s*([A-Z0-9]{4,16})\b/)?.[1];
+    if (fromText) return fromText;
+    const q = params(url);
+    for (const key of ORDER_PARAMS) {
+      const v = q.get(key);
+      if (v && /^[A-Z0-9-]{4,24}$/i.test(v)) return v;
+    }
+    return url.match(/\/orders?\/([A-Z0-9]{6,16})(?:[/?#]|$)/i)?.[1] ?? null;
+  }
+
+  // src/shared/redact.ts
+  var PERSON_LABELS = /* @__PURE__ */ new Set(["customer", "dasher", "driver"]);
+  var STOP_LABELS = /* @__PURE__ */ new Set([
+    "customer",
+    "dasher",
+    "driver",
+    "picked up",
+    "dropped off",
+    "pick up location",
+    "pickup location",
+    "channel",
+    "fulfillment",
+    "order details",
+    "error charges",
+    "associated transactions"
+  ]);
+  var COMMENTER = /^(.+) left a comment$/i;
+  var EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+  var PHONE = /(?:\+?1[-. ]?)?(?:\(\d{3}\)|\b\d{3})[-. ]\d{3}[-. ]\d{4}\b/g;
+  var MAX_BLOCK_LINES = 12;
+  function scrubText(text) {
+    const lines = text.split(/\r?\n/).map((l) => l.trim());
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue;
+      if (COMMENTER.test(line)) {
+        out.push("[PERSON] left a comment");
+        continue;
+      }
+      out.push(line);
+      if (!PERSON_LABELS.has(line.toLowerCase())) continue;
+      let skipped = 0;
+      while (i + 1 < lines.length && skipped < MAX_BLOCK_LINES) {
+        const next = lines[i + 1].toLowerCase();
+        if (next && STOP_LABELS.has(next)) break;
+        i++;
+        if (lines[i]) skipped++;
+      }
+      if (skipped) out.push("[redacted]");
+    }
+    return out.join("\n").replace(EMAIL, "[email]").replace(PHONE, "[phone]");
+  }
+
   // src/content/dom.ts
   var ORDER_HEADING = /(^|\n)Order:\s*[A-Z0-9]{4,}/;
   var PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers/i;
+  var FALLBACK_BLOCK_HEIGHT = 170;
   function findOrderRoot() {
     const candidates = document.querySelectorAll(
       '[class*="SidesheetBody"], [class*="SidesheetContent"], [role="dialog"], [aria-modal="true"]'
@@ -233,6 +313,15 @@
     }
     return ORDER_HEADING.test(document.body.innerText) ? document.body : null;
   }
+  function genericRoot() {
+    const candidates = [
+      ...document.querySelectorAll(
+        '[role="dialog"], [aria-modal="true"], [class*="SidesheetBody"], [class*="SidesheetContent"], [class*="drawer" i]'
+      )
+    ].filter((el) => el.getBoundingClientRect().height > 140);
+    return candidates.find((el) => el.scrollHeight > el.clientHeight + 20) ?? candidates.at(-1) ?? document.documentElement;
+  }
+  var captureRoot = () => findOrderRoot() ?? genericRoot();
   function viewport() {
     return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
   }
@@ -242,30 +331,67 @@
   function visible(r, vp) {
     return r.w > 0 && r.h > 0 && r.x < vp.innerWidth && r.y < vp.innerHeight && r.x + r.w > 0 && r.y + r.h > 0;
   }
-  function computeRects(root, names) {
-    if (names.length === 0) return null;
+  function textRect(node) {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    return range.getBoundingClientRect();
+  }
+  function rowRect(node, root) {
+    const start = node.parentElement;
+    if (!start) return null;
+    let target = start;
+    for (let i = 0; i < 2; i++) {
+      const parent = target.parentElement;
+      if (!parent || parent === root) break;
+      const pr = parent.getBoundingClientRect();
+      if (pr.height > 80 || pr.width > root.getBoundingClientRect().width * 0.98) break;
+      target = parent;
+    }
+    return target.getBoundingClientRect();
+  }
+  var hits = (re, text) => {
+    re.lastIndex = 0;
+    return re.test(text);
+  };
+  function redactionRects(root, names) {
     const vp = viewport();
     const rects = [];
     const found = /* @__PURE__ */ new Set();
+    const sheet = root.getBoundingClientRect();
+    const texts = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = node.textContent ?? "";
-      const hitName = names.find((n) => text.includes(n));
-      if (!hitName && !PROFILE_TEXT.test(text)) continue;
-      if (hitName) found.add(hitName);
-      const start2 = node.parentElement;
-      if (!start2) continue;
-      let target = start2;
-      for (let i = 0; i < 2; i++) {
-        const parent = target.parentElement;
-        if (!parent || parent === root) break;
-        const pr = parent.getBoundingClientRect();
-        if (pr.height > 80 || pr.width > root.getBoundingClientRect().width * 0.98) break;
-        target = parent;
+      const text = (node.textContent ?? "").trim();
+      if (text) texts.push({ node, text });
+    }
+    let traces = 0;
+    for (const { node, text } of texts) {
+      const name = names.find((n) => text.includes(n));
+      if (name) found.add(name);
+      if (!name && !PROFILE_TEXT.test(text) && !COMMENTER.test(text) && !hits(EMAIL, text) && !hits(PHONE, text)) continue;
+      const row = rowRect(node, root);
+      if (row) {
+        rects.push(toRect(row));
+        traces++;
       }
-      rects.push(toRect(target.getBoundingClientRect()));
+    }
+    for (let i = 0; i < texts.length; i++) {
+      if (!PERSON_LABELS.has(texts[i].text.toLowerCase())) continue;
+      const label = textRect(texts[i].node);
+      let end = label.bottom + FALLBACK_BLOCK_HEIGHT;
+      for (let j = i + 1; j < texts.length; j++) {
+        if (STOP_LABELS.has(texts[j].text.toLowerCase())) {
+          end = Math.min(end, textRect(texts[j].node).top);
+          break;
+        }
+      }
+      if (end > label.bottom) {
+        rects.push({ x: sheet.left - 2, y: label.bottom + 1, w: sheet.width + 4, h: end - label.bottom - 2 });
+        traces++;
+      }
     }
     if (names.some((n) => !found.has(n))) return null;
+    if (traces === 0) return null;
     return rects.filter((r) => visible(r, vp));
   }
   function scrolls(el, minHeight) {
@@ -307,67 +433,42 @@
     const text = root.innerText;
     const { snapshot, names } = parseOrder(text);
     if (!snapshot.orderId) return null;
+    return { url: location.href, snapshot, redactedText: scrubText(redactText(text, names)) };
+  }
+  function buildContext() {
+    const root = captureRoot();
+    const text = root.innerText.slice(0, 2e4);
     return {
-      names,
-      payload: {
-        url: location.href,
-        snapshot,
-        redactedText: redactText(text, names),
-        rects: computeRects(root, names),
-        viewport: viewport()
-      }
+      orderId: findOrderId(location.href, text),
+      storeId: findStoreId(location.href, document.body.innerText.slice(0, 2e4)),
+      title: document.title,
+      url: location.href,
+      safeText: scrubText(text).slice(0, 9e3)
     };
   }
-  function signature(p) {
-    let h = 0;
-    for (let i = 0; i < p.redactedText.length; i++) h = h * 31 + p.redactedText.charCodeAt(i) | 0;
-    return `${p.snapshot.orderId}:${h}`;
-  }
-  var lastSent = "";
-  var timer;
-  function check() {
-    const built = buildPayload();
-    if (!built) {
-      lastSent = "";
-      return;
-    }
-    const sig = signature(built.payload);
-    if (sig === lastSent) return;
-    lastSent = sig;
-    const msg = { type: "ORDER_DETECTED", payload: built.payload };
-    chrome.runtime.sendMessage(msg).catch(() => {
-    });
-  }
   async function frame(top) {
-    const root = findOrderRoot();
-    if (!root) return null;
+    const root = captureRoot();
     const scroller = findScroller(root);
     if (top !== null) {
       setScrollTop(scroller, top);
       await new Promise((r) => setTimeout(r, 350));
     }
     const { names } = parseOrder(root.innerText);
-    return { ...scrollMetrics(scroller), rects: computeRects(root, names), viewport: viewport() };
+    return { ...scrollMetrics(scroller), rects: redactionRects(root, names), viewport: viewport() };
   }
-  function start() {
-    new MutationObserver(() => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(check, 900);
-    }).observe(document.body, { childList: true, subtree: true, characterData: true });
-    check();
+  var flag = window;
+  if (!flag.__korefiReader) {
+    flag.__korefiReader = true;
     chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (msg.type === "GET_PAYLOAD") {
-        sendResponse(buildPayload()?.payload ?? null);
+        sendResponse(buildPayload());
+      } else if (msg.type === "GET_CAPTURE_CONTEXT") {
+        sendResponse(buildContext());
       } else if (msg.type === "SCROLL_FRAME") {
         void frame(msg.top).then(sendResponse, () => sendResponse(null));
         return true;
       }
       return false;
     });
-  }
-  var flag = window;
-  if (!flag.__korefiReader) {
-    flag.__korefiReader = true;
-    start();
   }
 })();

@@ -1,30 +1,45 @@
-# KoreFi Pi Dispute Agent Backend (POC)
+# KoreFi Pi Dispute Agent (backend)
 
-Server-side [Pi agent-core](https://github.com/earendil-works/pi) investigation service for KoreFi's DoorDash Chrome extension. This is a pilot, not autonomous DoorDash submission.
+Server-side [Pi agent-core](https://github.com/earendil-works/pi) investigation service for the KoreFi Chrome extension.
+It investigates and drafts; it never files anything in DoorDash.
 
 ## Deploy on Render
 
-Repository: `lakksithhariie-karbon/korefi-poc`
-Build: `cd 'dispute automation/agent-backend' && npm install --omit=dev --ignore-scripts`
+Repository `lakksithhariie-karbon/korefi-poc`, Node 22.19+.
+Build: `cd 'dispute automation/agent-backend' && npm install --omit=dev --ignore-scripts && npm test`
 Start: `node 'dispute automation/agent-backend/src/server.mjs'`
-Runtime: Node 22.19+ (Ohio).
 
 Environment:
-- `KOREFI_AGENT_TOKEN` (random secret, at least 32 chars)
-- `DATABASE_URL` (Neon role with read/write only in `dispute_automation`)
-- `HISTORY_DATABASE_URL` (Neon read-only role scoped to `doordash`)
-- `OPENAI_API_KEY` (server-side key, needed for investigations)
-- `OPENAI_MODEL` (optional, defaults `gpt-4.1-mini`)
-- `ALLOWED_EXTENSION_ORIGINS` (comma-separated Chrome extension origins after extension IDs are known)
+- `KOREFI_AGENT_TOKENS` per-operator tokens, `token:operator@example.com,token2:other@example.com`. Each token is at least 32 characters.
+  The server then decides who is calling and ignores any operator ID the client sends.
+- `KOREFI_AGENT_TOKEN` one shared token (at least 32 characters). Still works; the client must send `operator_id`.
+- `DATABASE_URL` Neon role with read/write on `dispute_automation`. `HISTORY_DATABASE_URL` read-only role on `doordash`.
+  Both are connected with `sslmode=verify-full` whatever the URL says (local hosts excepted).
+- `OPENAI_API_KEY`, optional `OPENAI_MODEL` (default `gpt-4.1-mini`; must accept images).
+- `ALLOWED_EXTENSION_ORIGINS` comma-separated `chrome-extension://<id>` origins.
+- Optional: `RATE_REQUESTS_PER_MIN` (240), `RATE_INVESTIGATIONS_PER_10MIN` (60). Four investigations run at a time per instance.
 
-Endpoints:
-- `GET /healthz` public liveness
-- `GET /readyz` bearer-authenticated role checks + model setup status
-- `POST /v1/investigations` bearer-authenticated, inputs: `operator_id`, optional `store_id`, `order_id`, `order_url`, `issue_category`, `issue_description`, `dispute_amount`, `structured_facts`, `redacted_page_text`, optional redacted `screenshot`. Persists case, agent investigation, tool call metadata. Image bytes not saved in database.
-- `POST /v1/disputes/confirm` bearer-authenticated, inputs: `operator_id`, optional `store_id`, `order_id`, `dispute_text`, `disputed_at` (ISO with timezone). This is an operator attestation, not DoorDash submission. Duplicate confirmations are idempotent.
+## API
 
-The backend uses read-only tools scoped to the current store: order financials, error charges, order issue reports, store issue frequencies and prior KoreFi cases. Historic error frequency is NOT a dispute win rate; missing historical outcomes must be described as unknown.
+All routes except `/healthz` need `Authorization: Bearer <token>`.
 
-Run `npm test` after dependencies are installed.
+- `GET /healthz` public. The extension calls it to wake the service.
+- `GET /readyz` database and model status.
+- `POST /v1/investigations` returns **202** at once with `{investigation_id, case_id, store_id, status:'running'}`.
+  Body: `order_id` (required), optional `store_id`, `order_url`, `issue_category`, `issue_description`, `dispute_amount`,
+  `structured_facts`, `redacted_page_text`, `operator_question`, `screenshots` (up to 6 JPEG/PNG data URLs, consecutive slices),
+  `conversation` (last turns, `[{role:'user'|'assistant', text}]`), `previous_draft`, `capture_status`.
+  A missing `store_id` is normal: it is looked up from the order, otherwise stored as `unresolved`, and the agent works without history.
+- `GET /v1/investigations/:id` returns `running`, `failed` (with a safe `error`), or `completed` with `recommendation`,
+  `reasoning_summary`, `missing_evidence`, `draft_text`, `risk_notes`, `tools_used`. A run orphaned by a restart is reported as failed.
+- `POST /v1/disputes/confirm` records the operator's confirmation once per case. `store_id` is optional; if the order was never
+  investigated the case is created. Body: `order_id`, `dispute_text`, `disputed_at` (ISO with timezone), optional `store_id`,
+  `order_url`, `dispute_amount`, `issue_category`. Returns `{id, case_id, store_id, submitted_at, already_recorded}`.
 
-Security: The POC has one shared bearer token and self-reported operator IDs. Before team rollout, add real user auth, per-merchant access controls, rate limiting, protected sensitive data, approved Chrome origins and end-to-end live portal tests. The existing sidebar v0.3 needs a follow-up integration change to call the agent and send store_id. Never put server tokens into GitHub or distributable extension code.
+The agent's tools are read-only and fixed to the current store and order. Historic issue frequency is not a win rate, and an
+adjustment is not proof of a won dispute.
+
+## Tests
+
+`npm test` runs without a database or model: the HTTP flow runs against an in-memory store with the same methods as the Neon one.
+The SQL itself is only exercised against real Neon; see `../db/schema.inferred.sql`.

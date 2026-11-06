@@ -1,100 +1,74 @@
+import { parseOrder } from './shared/extract.ts';
 import { assessRules } from './shared/rules.ts';
-import { getSettings, listCases, stableStringify, upsertCase } from './shared/storage.ts';
-import type { CaseRecord, FramePayload, PagePayload, Rect, RuntimeMessage } from './shared/types.ts';
+import { upsertCase } from './shared/storage.ts';
+import type { CaptureContext, CaseRecord, FramePayload, PagePayload, Rect, RuntimeMessage } from './shared/types.ts';
 
-chrome.runtime.onInstalled.addListener(() => void updateBadge());
-
-// Clicking the icon opens the panel and, through activeTab, lets us screenshot this tab until it navigates away.
+// Clicking the icon opens the panel and, through activeTab, lets us read and screenshot this tab until it navigates away.
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id !== undefined) void chrome.sidePanel.open({ tabId: tab.id });
 });
-chrome.runtime.onStartup.addListener(() => void updateBadge());
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.settings) void updateBadge();
-});
 
-async function updateBadge(): Promise<void> {
-  const { captureEnabled } = await getSettings();
-  await chrome.action.setBadgeText({ text: captureEnabled ? 'ON' : '' });
-  await chrome.action.setBadgeBackgroundColor({ color: '#B3261E' });
-  await chrome.action.setTitle({
-    title: captureEnabled ? 'Korefi Dispute Assistant: capturing order pages' : 'Korefi Dispute Assistant: capture is off',
-  });
-}
-
-// One capture at a time, so the duplicate check always sees the previous capture already saved.
+// One capture at a time.
 let queue: Promise<void> = Promise.resolve();
 function enqueue(job: () => Promise<void>): void {
   queue = queue.then(job).catch((err) => console.error('capture failed', err));
 }
 
-chrome.runtime.onMessage.addListener((msg: RuntimeMessage, sender) => {
-  if (msg.type === 'ORDER_DETECTED' && sender.tab) {
-    const tab = sender.tab;
-    enqueue(() => handleDetected(tab, msg.payload, 'auto'));
-  } else if (msg.type === 'CAPTURE_NOW') {
-    enqueue(() => handleManual(msg.tabId));
-  }
+chrome.runtime.onMessage.addListener((msg: RuntimeMessage) => {
+  if (msg.type === 'CAPTURE_NOW') enqueue(() => capture(msg.tabId));
   return false;
 });
 
-async function readPayload(tabId: number): Promise<PagePayload | null> {
-  const ask = () => chrome.tabs.sendMessage(tabId, { type: 'GET_PAYLOAD' } satisfies RuntimeMessage) as Promise<PagePayload | null>;
+function fail(reason: string): void {
+  chrome.runtime.sendMessage({ type: 'CAPTURE_FAILED', reason } satisfies RuntimeMessage).catch(() => {});
+}
+
+/** Asks the page reader, adding it first if this tab was opened before the extension loaded. */
+async function askPage<T>(tabId: number, msg: RuntimeMessage): Promise<T> {
   try {
-    return await ask();
+    return (await chrome.tabs.sendMessage(tabId, msg)) as T;
   } catch {
-    // No reader on this tab (page opened before the extension loaded, or on an address the manifest does not list).
-    // Clicking the toolbar icon grants activeTab, which lets us add the reader now.
     await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-    return await ask();
+    return (await chrome.tabs.sendMessage(tabId, msg)) as T;
   }
 }
 
-async function handleManual(tabId: number): Promise<void> {
+async function capture(tabId: number): Promise<void> {
   let tab: chrome.tabs.Tab;
   try {
     tab = await chrome.tabs.get(tabId);
   } catch {
     return fail('That tab is no longer open.');
   }
+
   let payload: PagePayload | null;
+  let context: CaptureContext | null;
   try {
-    payload = await readPayload(tabId);
+    payload = await askPage<PagePayload | null>(tabId, { type: 'GET_PAYLOAD' });
+    context = await askPage<CaptureContext | null>(tabId, { type: 'GET_CAPTURE_CONTEXT' });
   } catch {
     const host = tab.url ? ` (${new URL(tab.url).hostname})` : '';
-    return fail(`Could not read this tab${host}. Click the Korefi icon in the toolbar on the DoorDash order tab, then press Capture now.`);
+    return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the DoorDash tab, then try again.`);
   }
-  if (!payload) return fail('No order is open on this tab. Open an order so its details sheet is showing.');
-  await handleDetected(tab, payload, 'manual');
-}
 
-function fail(reason: string): void {
-  chrome.runtime.sendMessage({ type: 'CAPTURE_FAILED', reason } satisfies RuntimeMessage).catch(() => {});
-}
+  // A page the parser does not understand is still worth investigating: use what the page revealed, without personal details.
+  const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
+  const snapshot = payload?.snapshot ?? parseOrder(`Order: ${orderId}`).snapshot;
+  const redactedText = payload?.redactedText ?? context?.safeText ?? '';
 
-async function handleDetected(tab: chrome.tabs.Tab, payload: PagePayload, trigger: 'auto' | 'manual'): Promise<void> {
-  const settings = await getSettings();
-  if (trigger === 'auto' && !settings.captureEnabled) return;
-
-  const existing = await listCases();
-  const last = existing.find((c) => c.orderId === payload.snapshot.orderId);
-  // chrome.storage returns keys sorted, so compare with a key-sorted serialization.
-  const duplicate = !!last && stableStringify(last.snapshot) === stableStringify(payload.snapshot);
-  console.debug('[capture]', trigger, payload.snapshot.orderId, { stored: existing.length, duplicate });
-  if (trigger === 'auto' && duplicate) return;
-
-  const { image, note } = await takeRedactedScreenshot(tab, payload);
+  const { image, note } = await takeRedactedScreenshot(tab);
   const record: CaseRecord = {
-    id: `${payload.snapshot.orderId}-${Date.now().toString(36)}`,
-    orderId: payload.snapshot.orderId,
+    id: `${orderId}-${Date.now().toString(36)}`,
+    orderId,
+    storeId: context?.storeId ?? null,
     createdAt: new Date().toISOString(),
-    trigger,
-    url: payload.url,
-    snapshot: payload.snapshot,
-    redactedText: payload.redactedText,
+    trigger: 'manual',
+    url: payload?.url ?? context?.url ?? tab.url ?? '',
+    snapshot,
+    redactedText,
     image,
     imageNote: note,
-    facts: assessRules(payload.snapshot),
+    facts: assessRules(snapshot),
     assessment: null,
     status: 'new',
   };
@@ -107,29 +81,28 @@ const MAX_FRAMES = 14;
 const CAPTURE_GAP_MS = 600;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const withheld = (why: string) => ({ image: null, note: `Screenshot withheld: ${why}` });
+const withheld = (why: string) => ({ image: null, note: `No screenshot: ${why}` });
+const CANNOT_HIDE =
+  'personal details could not be located on the page, so nothing was captured. The assistant will work from the redacted page text.';
 
 /**
- * Scrolls the order sheet one screen at a time, screenshots each screen, blacks out personal details
- * in each one, and stitches them into a single tall image. The scroll position is put back afterwards.
- * Fails closed: if the details cannot be located on any screen, or the page moved while capturing, no image is kept.
+ * Scrolls the order sheet one screen at a time, screenshots each screen, blacks out personal details in each one,
+ * and stitches them into a single tall image. The scroll position is put back afterwards.
+ *
+ * There is no unredacted path. If the details cannot be located on any screen, or the page moves while capturing,
+ * the whole screenshot is dropped.
  */
-async function takeRedactedScreenshot(
-  tab: chrome.tabs.Tab,
-  payload: PagePayload,
-): Promise<{ image: string | null; note: string | null }> {
-  if (!payload.rects) return withheld('personal details could not be located on the page to black out.');
+async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: string | null; note: string | null }> {
   if (!tab.active || tab.id === undefined || tab.windowId === undefined) {
-    return { image: null, note: 'Screenshot skipped: the order tab is not the active tab.' };
+    return { image: null, note: 'No screenshot: the DoorDash tab is not the active tab. Switch to it and capture again.' };
   }
   const tabId = tab.id;
-  const ask = (top: number | null) =>
-    chrome.tabs.sendMessage(tabId, { type: 'SCROLL_FRAME', top } satisfies RuntimeMessage) as Promise<FramePayload | null>;
+  const ask = (top: number | null) => askPage<FramePayload | null>(tabId, { type: 'SCROLL_FRAME', top });
 
   let start: FramePayload | null = null;
   try {
     start = await ask(null);
-    if (!start) return withheld('the order sheet is no longer on the page.');
+    if (!start) return withheld('the page could not be read.');
 
     const maxTop = Math.max(0, start.scrollHeight - start.clientHeight);
     const stride = Math.max(100, start.clientHeight - 40);
@@ -146,24 +119,24 @@ async function takeRedactedScreenshot(
     let lastShot = 0;
     for (const top of tops) {
       const before = await ask(top);
-      if (!before?.rects) return withheld('personal details could not be located on the page to black out.');
+      if (!before?.rects) return withheld(CANNOT_HIDE);
       await sleep(Math.max(0, CAPTURE_GAP_MS - (Date.now() - lastShot)));
       const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
       lastShot = Date.now();
       // Measure again after the capture; if anything moved, the black-out boxes may be misplaced.
       const after = await ask(null);
       if (!after?.rects || Math.abs(after.scrollTop - before.scrollTop) > 1 || !rectsMatch(before.rects, after.rects)) {
-        return withheld('the page moved while capturing. Press Capture now again and leave the page alone for a few seconds.');
+        return withheld('the page moved while capturing. Leave it alone for a few seconds and capture again.');
       }
       sheet = await paintFrame(sheet, raw, before, maxTop);
     }
     return { image: sheet ? await finish(sheet) : null, note };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (/activeTab|all_urls/.test(msg)) {
-      return { image: null, note: 'Screenshot needs permission: click the Korefi icon in the toolbar on this tab once, then press Capture now.' };
+    if (/activeTab|all_urls|cannot access/i.test(msg)) {
+      return { image: null, note: 'No screenshot: click the KoreFi icon in the toolbar on this tab once, then capture again.' };
     }
-    return { image: null, note: `Screenshot failed: ${msg}` };
+    return { image: null, note: `No screenshot: ${msg}` };
   } finally {
     if (start) await ask(start.scrollTop).catch(() => {});
   }

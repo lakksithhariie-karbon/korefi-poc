@@ -1,68 +1,69 @@
-# KoreFi Dispute Assistant · v0.3 Chrome sidebar pilot
+# KoreFi Dispute Assistant v0.7
 
-A compact **Chrome Manifest V3 side panel** for DoorDash internal operations.
+A Chrome side-panel extension and a small agent service for DoorDash disputes. The operator opens an order in the
+DoorDash merchant portal, captures it, asks the agent what to do, edits the draft, **files the dispute in DoorDash
+themselves**, and then confirms. Nothing is ever submitted to DoorDash by this software.
 
-## Workflow
-
-1. **Capture full order:** With the DoorDash order sheet open, click **Capture full-page order**. The extension scrolls the order sheet, redacts identified personal details, and stitches the screenshot. If the scroll was truncated or redaction fails, the UI warns instead of falsely showing a complete screenshot.
-2. **Chat about the issue:** Add an OpenAI API key in Settings to ask live questions. The assistant receives the parsed order, redacted page text, and redacted screenshot when available. It is prohibited from inventing evidence.
-3. **Prepare dispute text:** Generate a factual, editable dispute response, review it, and copy it to DoorDash.
-4. **Confirm manually:** Only after the operator files in DoorDash, click **Yes, disputed**. The status and exact copied text are stored locally first. If a logging endpoint is configured, a POST attempts to sync the submission. **Only HTTP 2xx makes the UI display “Dispute logged in KoreFi”.** A failed sync remains queued locally with a Retry action. Orders already marked filed are not logged twice within a Chrome profile.
-
-## Installation
-
-Extract the release ZIP, open `chrome://extensions`, enable Developer mode, click **Load unpacked**, and select the **dist** folder. Open DoorDash, open the relevant order details sheet, and click the KoreFi extension toolbar icon to open its sidebar.
-
-The official wordmark is displayed from `https://www.korefi.ai/korefi-logo.png`, with a text fallback if the browser cannot retrieve it.
-
-## AI setup
-
-Open the Settings icon and enter an OpenAI API key. Default model is `gpt-4.1-mini` (can be overridden). Model requests go directly from the local pilot extension to OpenAI. Do not distribute shared keys in a team production rollout. The extension never submits a dispute to DoorDash.
-
-## KoreFi DB logging integration
-
-Set **KoreFi dispute logging endpoint** to an authenticated HTTPS **POST** endpoint implemented by your backend, and add its bearer token if required. Chrome requests permission for that endpoint's origin when you save Settings. Sample request:
-
-```http
-POST /your-backend-route HTTP/1.1
-Content-Type: application/json
-Authorization: Bearer <internal-ops-token>
-Idempotency-Key: doordash:3990CBFD
-
-{
-  "platform": "doordash",
-  "order_id": "3990CBFD",
-  "case_id": "3990CBFD-example",
-  "idempotency_key": "doordash:3990CBFD",
-  "order_url": "https://merchant.doordash.com/...",
-  "disputed_at": "2026-11-06T12:00:00.000Z",
-  "dispute_text": "Please review...",
-  "dispute_amount": 7.99,
-  "error_reason": "Missing item",
-  "source": "korefi-chrome-extension"
-}
+```
+DoorDash tab ── capture (scroll, redact, stitch) ──► side panel ── Send ──► Pi agent service (Render) ──► Neon
+                                                         ▲                         │ 202 + poll
+                                                         └──────── answer + draft ◄┘
 ```
 
-Return HTTP **2xx** only after the backend has durably saved the record. Any JSON response may optionally contain `id`, `dispute_id`, or `record_id`. Enforce server-side authentication, authorization, outlet identity, a unique constraint / idempotency key, and validation. The extension has no direct Neon credentials and never claims a local save is a backend save.
+## Using it
 
-For a backend requiring cookies or CORS preflight, configure it to accept extension-origin requests and `Idempotency-Key`, or route requests through an authenticated same-origin gateway. Tokens stored in Chrome are **pilot-only**.
+1. `npm install && npm run build`, then in Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → `dist/`.
+2. Open a DoorDash order, click the KoreFi icon on that tab. Open Settings (sun icon) once: agent URL, your agent token, operator ID.
+3. **+** captures the order. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
+4. **Draft** tab: edit, **Copy dispute**, file it in DoorDash, then **Yes, disputed** to log it.
 
-## Safety and known limitations
+## What changed in v0.7
 
-- Initial DoorDash parser was validated on a limited portal sample; manually verify extracted order IDs, amounts, and screenshot completeness.
-- Redaction covers identified names, not every possible field. Don't assume screenshots are fully anonymized; do not upload them to the dispute logging API.
-- Screenshotting uses `activeTab`, and works best when the order remains visible, with no manual scrolling during the stitch operation.
-- A very long order can exceed the screenshot frame limit; UI will explicitly show a partial-capture warning.
-- The 14-day rule is a working assumption and must be verified against actual DoorDash terms.
-- Confirmation represents an **operator attestation**, not proof DoorDash accepted the dispute. Recoveries and decisions are outside this minimal flow.
-- Per-browser local storage is not a central ops database. To enable real cross-operator logging, configure a KoreFi backend route.
+- **No unredacted screenshot exists.** If personal details cannot be located and hidden on every screen, no screenshot is taken and the
+  agent works from the redacted page text. There is no fallback, no warning and no override. Redaction no longer depends on the parser:
+  it uses names the parser found, the blocks under the Customer / Dasher labels, and emails / phone numbers, and covers the
+  "left a comment" attribution line.
+- **No store ID is not an error.** A store with no history, or one that could not be identified, still gets a full answer and a draft.
+  The store ID is read from the page address or text when present, can be typed in by hand, and is optional.
+- **Investigations are asynchronous.** The panel pings the backend when it opens (Render's free plan sleeps), starts the investigation,
+  and polls for the result, so a slow wake-up or a dropped connection no longer loses the answer.
+- **Chat has memory.** Follow-ups send the recent conversation and the current draft. The screenshot stays in context for the case.
+  Tall screenshots go as consecutive slices instead of one shrunken strip.
+- **Filing is logged even without a store ID or a prior investigation.**
+- Per-operator tokens, rate limits, request logging (no bodies, tokens or images), explicit strict database SSL, empty 204 preflight.
 
-## Development
+## Layout
+
+```
+src/background.ts        capture queue; scroll, screenshot, redact, stitch (fails closed)
+src/content/             page reader: parse, redaction regions, scrolling (runs only when asked)
+src/shared/              parser, rules, text scrubbing, store/order ID detection, storage
+src/sidepanel/           chat UI (app.js), markup, styles
+agent-backend/           Node service: async investigations, Pi agent, Neon store
+db/schema.inferred.sql   tables reconstructed from the queries (NOT the live schema; verify against Neon)
+e2e/run.mjs              real extension in Chromium against a mock portal and a fake Pi backend
+```
+
+## Tests
 
 ```bash
-npm ci
-npm run build
-npm test
+npm run typecheck
+npm test            # extension unit tests + backend tests (no database or model needed)
+npm run e2e         # needs the Playwright browser in .browsers (npx playwright install chromium)
 ```
 
-For mock-portal tests, use `npm run e2e` (requires Playwright browser binaries). Only the release `dist` folder is needed for installation.
+## What leaves the browser
+
+Only when you press Send: the parsed order facts (no customer or Dasher names), redacted page text, the redacted screenshot slices,
+the recent chat, and your draft. They go to your Pi agent service, which sends them to OpenAI. Cases and screenshots are kept in
+`chrome.storage.local`; the backend stores case facts, investigations and tool-call metadata, never image bytes.
+
+## Limits and open decisions
+
+- The parser and the Customer / Dasher anchors were built from one real order page. If DoorDash changes its layout, capture degrades
+  to data-only rather than leaking.
+- One shared token per operator is a pilot measure. Use `KOREFI_AGENT_TOKENS` for per-operator identity; real sign-in comes later.
+- Confirmation is the operator's word that they filed it, not proof that DoorDash accepted it.
+- **Who sits at the DoorDash portal is still unresolved.** DoorDash's Merchant Portal Security Terms restrict portal access to the
+  merchant itself. Get counsel's view before using this on a merchant's account.
+- The 14-day dispute window is a working assumption to verify.

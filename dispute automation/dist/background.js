@@ -1,5 +1,216 @@
 "use strict";
 (() => {
+  // src/shared/extract.ts
+  var MONEY_LINE = /^([-−–+]?)\s*US?\$\s?([\d,]+(?:\.\d{1,2})?)$/;
+  var MONEY_TRAILING = /\s([-−–+]?\s*US?\$\s?[\d,]+(?:\.\d{1,2})?)$/;
+  var QTY = /^(\d+)\s*[×x](?:\s+(.*))?$/i;
+  var DISPUTE_CHIP = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted|eligible|available)$/i;
+  var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
+  var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
+  var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
+  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$/i;
+  var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
+  var MONTHS = {
+    january: 0,
+    february: 1,
+    march: 2,
+    april: 3,
+    may: 4,
+    june: 5,
+    july: 6,
+    august: 7,
+    september: 8,
+    october: 9,
+    november: 10,
+    december: 11
+  };
+  function parseMoney(s) {
+    const m = s.trim().match(MONEY_LINE);
+    if (!m) return null;
+    const v = parseFloat(m[2].replace(/,/g, ""));
+    return m[1] === "-" || m[1] === "\u2212" || m[1] === "\u2013" ? -v : v;
+  }
+  function isMoneyLine(l) {
+    return MONEY_LINE.test(l.trim());
+  }
+  function valueAfter(lines, i, window = 2) {
+    const trailing = lines[i].match(MONEY_TRAILING);
+    if (trailing) return parseMoney(trailing[1].replace(/\s+/g, ""));
+    for (let j = i + 1; j <= i + window && j < lines.length; j++) {
+      if (isMoneyLine(lines[j])) return parseMoney(lines[j]);
+    }
+    return null;
+  }
+  function parsePlacedAt(text) {
+    const m = text.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*([ap]m)/i);
+    if (!m) return null;
+    const month = MONTHS[m[2].toLowerCase()];
+    if (month === void 0) return null;
+    let hour = parseInt(m[4], 10) % 12;
+    if (m[6].toLowerCase() === "pm") hour += 12;
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${m[3]}-${pad(month + 1)}-${pad(parseInt(m[1], 10))}T${pad(hour)}:${m[5]}`;
+  }
+  function splitEntries(block) {
+    const out = [];
+    let cur = null;
+    for (const l of block) {
+      const m = l.match(QTY);
+      if (m) {
+        cur = { qty: parseInt(m[1], 10), rest: m[2] ? [m[2]] : [] };
+        out.push(cur);
+      } else if (cur) {
+        cur.rest.push(l);
+      }
+    }
+    return out;
+  }
+  function parseItem(e) {
+    let name = "";
+    let price = null;
+    const options = [];
+    for (const l of e.rest) {
+      if (isMoneyLine(l)) {
+        if (price === null) price = parseMoney(l);
+      } else if (!name) {
+        name = l;
+      } else {
+        options.push(l);
+      }
+    }
+    return { qty: e.qty, name, options, price };
+  }
+  function parseErrorEntry(e, names) {
+    const out = {
+      item: "",
+      options: [],
+      reason: null,
+      disputeStatus: null,
+      amount: null,
+      customerComment: null
+    };
+    let expectComment = false;
+    for (const l of e.rest) {
+      const commenter = l.match(/^(.+) left a comment$/);
+      if (isMoneyLine(l)) {
+        if (out.amount === null) out.amount = parseMoney(l);
+      } else if (commenter) {
+        names.push(commenter[1]);
+        expectComment = true;
+      } else if (expectComment) {
+        out.customerComment = l.replace(/^["“”']+|["“”']+$/g, "");
+        expectComment = false;
+      } else if (DISPUTE_CHIP.test(l)) {
+        out.disputeStatus = l.replace(/^Dispute /i, "").toLowerCase();
+      } else if (out.reason === null && REASON.test(l) && l.length < 60) {
+        out.reason = l;
+      } else if (!out.item) {
+        out.item = l;
+      } else {
+        out.options.push(l);
+      }
+    }
+    return out;
+  }
+  function parseOrder(rawText) {
+    const lines = rawText.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+    const find = (pred, from = 0, to = lines.length) => {
+      for (let i = Math.max(from, 0); i < to; i++) if (pred(lines[i])) return i;
+      return -1;
+    };
+    const names = [];
+    const iOrder = find((l) => /^Order:\s*\S+/.test(l));
+    const orderId = iOrder >= 0 ? lines[iOrder].replace(/^Order:\s*/, "").trim() : "";
+    const iPlaced = find((l) => /^Order placed:/i.test(l));
+    const placedAtText = iPlaced >= 0 ? lines[iPlaced].replace(/^Order placed:\s*/i, "") : null;
+    const iDelivery = find((l) => l === "Delivery details");
+    const iDetails = find((l) => l === "Order details");
+    const iErr = find((l) => l === "Error charges", Math.max(iDetails, 0));
+    const iErrSub = find((l) => l === "Error charge subtotal", Math.max(iErr, 0));
+    const iAssoc = find((l) => /^Associated transactions/i.test(l));
+    const headerEnd = iDelivery >= 0 ? iDelivery : iDetails >= 0 ? iDetails : lines.length;
+    const header = lines.slice(Math.max(iOrder, 0) + 1, headerEnd);
+    const status = header.find((l) => /^(Completed|Cancelled|Canceled|Refunded|In progress|Active|Scheduled)$/i.test(l)) ?? null;
+    const disputeChip = header.find((l) => DISPUTE_CHIP.test(l));
+    const disputeStatus = disputeChip ? disputeChip.replace(/^Dispute /i, "").toLowerCase() : null;
+    const notice = header.find((l) => l.length > 30 && /dispute/i.test(l)) ?? null;
+    const dEnd = iDetails >= 0 ? iDetails : lines.length;
+    const iCustomer = find((l) => l === "Customer", iDelivery, dEnd);
+    const iDasher = find((l) => l === "Dasher", iDelivery, dEnd);
+    const iPicked = find((l) => l === "Picked up", iDelivery, dEnd);
+    const nameAfter = (from, to) => {
+      for (let i = from + 1; i < to; i++) {
+        const l = lines[i];
+        if (l.length <= 1 || UI_NOISE.test(l) || PROFILE_NOISE.test(l)) continue;
+        return l;
+      }
+      return null;
+    };
+    if (iCustomer >= 0) {
+      const n = nameAfter(iCustomer, iDasher > iCustomer ? iDasher : iPicked > iCustomer ? iPicked : dEnd);
+      if (n) names.push(n);
+    }
+    if (iDasher >= 0) {
+      const n = nameAfter(iDasher, iPicked > iDasher ? iPicked : dEnd);
+      if (n) names.push(n);
+    }
+    const pairs = [];
+    for (let i = Math.max(iPicked, iDelivery, 0); i < dEnd; i++) {
+      if (!TIME.test(lines[i])) continue;
+      const q = lines[i + 1]?.match(QUOTED);
+      pairs.push({ actual: lines[i], quoted: q ? q[1] : null });
+    }
+    const none = { actual: null, quoted: null };
+    const channelLine = lines.slice(Math.max(iDelivery, 0), dEnd).find((l) => /^(Marketplace|Storefront|Drive)$/i.test(l)) ?? null;
+    const fulfillLine = lines.slice(Math.max(iDelivery, 0), dEnd).find((l) => /^(DoorDash delivery|Self[- ]delivery|Pickup|Dine[- ]in)$/i.test(l)) ?? null;
+    const odEnd = iErr >= 0 ? iErr : iAssoc >= 0 ? iAssoc : lines.length;
+    const iSubtotal = find((l) => l === "Subtotal", iDetails, odEnd);
+    const itemBlock = iDetails >= 0 ? lines.slice(iDetails + 1, iSubtotal >= 0 ? iSubtotal : odEnd) : [];
+    const items = splitEntries(itemBlock).map(parseItem);
+    const rowValue = (label, from, to) => {
+      const i = find((l) => typeof label === "string" ? l === label : label.test(l), from, to);
+      return i >= 0 ? valueAfter(lines, i) : null;
+    };
+    const iCommission = find((l) => /^Commission/i.test(l), iDetails, odEnd);
+    const commissionPct = iCommission >= 0 ? parseFloat(lines[iCommission].match(/\(([\d.]+)%\)/)?.[1] ?? "NaN") : NaN;
+    const errBlock = iErr >= 0 ? lines.slice(iErr + 1, iErrSub >= 0 ? iErrSub : iAssoc >= 0 ? iAssoc : lines.length) : [];
+    const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e, names));
+    const tailFrom = iErrSub >= 0 ? iErrSub : iErr >= 0 ? iErr : 0;
+    const transactions = [];
+    if (iAssoc >= 0) {
+      for (let i = iAssoc + 1; i < lines.length; i++) {
+        const m = lines[i].match(/^Transaction #(\d+)\s*[-–]\s*(.+?)(?:\s+([-−–+]?\s*US?\$\s?[\d,]+(?:\.\d{1,2})?))?$/);
+        if (!m) continue;
+        const amount = m[3] ? parseMoney(m[3].replace(/\s+/g, "")) : valueAfter(lines, i);
+        transactions.push({ id: m[1], kind: m[2], amount });
+      }
+    }
+    const snapshot = {
+      orderId,
+      placedAtText,
+      placedAt: placedAtText ? parsePlacedAt(placedAtText) : null,
+      status,
+      disputeStatus,
+      notice,
+      channel: channelLine,
+      fulfillment: fulfillLine,
+      pickedUp: pairs[0] ?? { ...none },
+      droppedOff: pairs[1] ?? { ...none },
+      items,
+      subtotal: rowValue("Subtotal", iDetails, odEnd),
+      tax: rowValue("Tax", iDetails, odEnd),
+      commissionPct: Number.isNaN(commissionPct) ? null : commissionPct,
+      commission: iCommission >= 0 ? valueAfter(lines, iCommission) : null,
+      orderTotal: rowValue("Order total", iDetails, odEnd),
+      errorCharges,
+      errorChargeTotal: rowValue("Error charge total", tailFrom, lines.length),
+      errorCredit: rowValue(/^Error charge credit/i, tailFrom, lines.length),
+      estimatedPayout: rowValue("Estimated payout", tailFrom, lines.length),
+      transactions
+    };
+    return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
+  }
+
   // src/shared/rules.ts
   var DISPUTE_WINDOW_DAYS = 14;
   var DECIDED = /^(approved|denied|rejected|declined)$/;
@@ -38,26 +249,8 @@
     };
   }
 
-  // src/shared/types.ts
-  var DEFAULT_SETTINGS = {
-    apiKey: "",
-    model: "",
-    baseUrl: "",
-    captureEnabled: false
-  };
-
   // src/shared/storage.ts
-  var MAX_CASES = 40;
-  function stableStringify(value) {
-    return JSON.stringify(
-      value,
-      (_k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a < b ? -1 : 1)) : v
-    );
-  }
-  async function getSettings() {
-    const { settings } = await chrome.storage.local.get("settings");
-    return { ...DEFAULT_SETTINGS, ...settings ?? {} };
-  }
+  var MAX_CASES = 120;
   async function listCases() {
     const { cases } = await chrome.storage.local.get("cases");
     return cases ?? [];
@@ -71,45 +264,30 @@
   }
 
   // src/background.ts
-  chrome.runtime.onInstalled.addListener(() => void updateBadge());
   chrome.action.onClicked.addListener((tab) => {
     if (tab.id !== void 0) void chrome.sidePanel.open({ tabId: tab.id });
   });
-  chrome.runtime.onStartup.addListener(() => void updateBadge());
-  chrome.storage.onChanged.addListener((changes) => {
-    if (changes.settings) void updateBadge();
-  });
-  async function updateBadge() {
-    const { captureEnabled } = await getSettings();
-    await chrome.action.setBadgeText({ text: captureEnabled ? "ON" : "" });
-    await chrome.action.setBadgeBackgroundColor({ color: "#B3261E" });
-    await chrome.action.setTitle({
-      title: captureEnabled ? "Korefi Dispute Assistant: capturing order pages" : "Korefi Dispute Assistant: capture is off"
-    });
-  }
   var queue = Promise.resolve();
   function enqueue(job) {
     queue = queue.then(job).catch((err) => console.error("capture failed", err));
   }
-  chrome.runtime.onMessage.addListener((msg, sender) => {
-    if (msg.type === "ORDER_DETECTED" && sender.tab) {
-      const tab = sender.tab;
-      enqueue(() => handleDetected(tab, msg.payload, "auto"));
-    } else if (msg.type === "CAPTURE_NOW") {
-      enqueue(() => handleManual(msg.tabId));
-    }
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "CAPTURE_NOW") enqueue(() => capture(msg.tabId));
     return false;
   });
-  async function readPayload(tabId) {
-    const ask = () => chrome.tabs.sendMessage(tabId, { type: "GET_PAYLOAD" });
+  function fail(reason) {
+    chrome.runtime.sendMessage({ type: "CAPTURE_FAILED", reason }).catch(() => {
+    });
+  }
+  async function askPage(tabId, msg) {
     try {
-      return await ask();
+      return await chrome.tabs.sendMessage(tabId, msg);
     } catch {
       await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
-      return await ask();
+      return await chrome.tabs.sendMessage(tabId, msg);
     }
   }
-  async function handleManual(tabId) {
+  async function capture(tabId) {
     let tab;
     try {
       tab = await chrome.tabs.get(tabId);
@@ -117,39 +295,30 @@
       return fail("That tab is no longer open.");
     }
     let payload;
+    let context;
     try {
-      payload = await readPayload(tabId);
+      payload = await askPage(tabId, { type: "GET_PAYLOAD" });
+      context = await askPage(tabId, { type: "GET_CAPTURE_CONTEXT" });
     } catch {
       const host = tab.url ? ` (${new URL(tab.url).hostname})` : "";
-      return fail(`Could not read this tab${host}. Click the Korefi icon in the toolbar on the DoorDash order tab, then press Capture now.`);
+      return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the DoorDash tab, then try again.`);
     }
-    if (!payload) return fail("No order is open on this tab. Open an order so its details sheet is showing.");
-    await handleDetected(tab, payload, "manual");
-  }
-  function fail(reason) {
-    chrome.runtime.sendMessage({ type: "CAPTURE_FAILED", reason }).catch(() => {
-    });
-  }
-  async function handleDetected(tab, payload, trigger) {
-    const settings = await getSettings();
-    if (trigger === "auto" && !settings.captureEnabled) return;
-    const existing = await listCases();
-    const last = existing.find((c) => c.orderId === payload.snapshot.orderId);
-    const duplicate = !!last && stableStringify(last.snapshot) === stableStringify(payload.snapshot);
-    console.debug("[capture]", trigger, payload.snapshot.orderId, { stored: existing.length, duplicate });
-    if (trigger === "auto" && duplicate) return;
-    const { image, note } = await takeRedactedScreenshot(tab, payload);
+    const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
+    const snapshot = payload?.snapshot ?? parseOrder(`Order: ${orderId}`).snapshot;
+    const redactedText = payload?.redactedText ?? context?.safeText ?? "";
+    const { image, note } = await takeRedactedScreenshot(tab);
     const record = {
-      id: `${payload.snapshot.orderId}-${Date.now().toString(36)}`,
-      orderId: payload.snapshot.orderId,
+      id: `${orderId}-${Date.now().toString(36)}`,
+      orderId,
+      storeId: context?.storeId ?? null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      trigger,
-      url: payload.url,
-      snapshot: payload.snapshot,
-      redactedText: payload.redactedText,
+      trigger: "manual",
+      url: payload?.url ?? context?.url ?? tab.url ?? "",
+      snapshot,
+      redactedText,
       image,
       imageNote: note,
-      facts: assessRules(payload.snapshot),
+      facts: assessRules(snapshot),
       assessment: null,
       status: "new"
     };
@@ -160,18 +329,18 @@
   var MAX_FRAMES = 14;
   var CAPTURE_GAP_MS = 600;
   var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  var withheld = (why) => ({ image: null, note: `Screenshot withheld: ${why}` });
-  async function takeRedactedScreenshot(tab, payload) {
-    if (!payload.rects) return withheld("personal details could not be located on the page to black out.");
+  var withheld = (why) => ({ image: null, note: `No screenshot: ${why}` });
+  var CANNOT_HIDE = "personal details could not be located on the page, so nothing was captured. The assistant will work from the redacted page text.";
+  async function takeRedactedScreenshot(tab) {
     if (!tab.active || tab.id === void 0 || tab.windowId === void 0) {
-      return { image: null, note: "Screenshot skipped: the order tab is not the active tab." };
+      return { image: null, note: "No screenshot: the DoorDash tab is not the active tab. Switch to it and capture again." };
     }
     const tabId = tab.id;
-    const ask = (top) => chrome.tabs.sendMessage(tabId, { type: "SCROLL_FRAME", top });
+    const ask = (top) => askPage(tabId, { type: "SCROLL_FRAME", top });
     let start = null;
     try {
       start = await ask(null);
-      if (!start) return withheld("the order sheet is no longer on the page.");
+      if (!start) return withheld("the page could not be read.");
       const maxTop = Math.max(0, start.scrollHeight - start.clientHeight);
       const stride = Math.max(100, start.clientHeight - 40);
       const tops = [];
@@ -186,23 +355,23 @@
       let lastShot = 0;
       for (const top of tops) {
         const before = await ask(top);
-        if (!before?.rects) return withheld("personal details could not be located on the page to black out.");
+        if (!before?.rects) return withheld(CANNOT_HIDE);
         await sleep(Math.max(0, CAPTURE_GAP_MS - (Date.now() - lastShot)));
         const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
         lastShot = Date.now();
         const after = await ask(null);
         if (!after?.rects || Math.abs(after.scrollTop - before.scrollTop) > 1 || !rectsMatch(before.rects, after.rects)) {
-          return withheld("the page moved while capturing. Press Capture now again and leave the page alone for a few seconds.");
+          return withheld("the page moved while capturing. Leave it alone for a few seconds and capture again.");
         }
         sheet = await paintFrame(sheet, raw, before, maxTop);
       }
       return { image: sheet ? await finish(sheet) : null, note };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (/activeTab|all_urls/.test(msg)) {
-        return { image: null, note: "Screenshot needs permission: click the Korefi icon in the toolbar on this tab once, then press Capture now." };
+      if (/activeTab|all_urls|cannot access/i.test(msg)) {
+        return { image: null, note: "No screenshot: click the KoreFi icon in the toolbar on this tab once, then capture again." };
       }
-      return { image: null, note: `Screenshot failed: ${msg}` };
+      return { image: null, note: `No screenshot: ${msg}` };
     } finally {
       if (start) await ask(start.scrollTop).catch(() => {
       });

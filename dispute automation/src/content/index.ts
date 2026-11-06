@@ -1,84 +1,59 @@
-// Content script. It reads the order page the person already has open and reports it.
-// It never clicks, navigates, edits the page, or calls any DoorDash endpoint. The one thing it does
-// besides reading is scroll the order sheet while a screenshot is taken, then put the scroll back.
+// Content script. It answers the extension when the operator presses capture; it never runs on its own.
+// It never clicks, navigates, edits the page, or calls any DoorDash endpoint. The one thing it does besides
+// reading is scroll the order sheet while a screenshot is taken, then the background worker puts the scroll back.
 import { parseOrder, redactText } from '../shared/extract.ts';
-import type { FramePayload, PagePayload, RuntimeMessage } from '../shared/types.ts';
-import { computeRects, findOrderRoot, findScroller, scrollMetrics, setScrollTop, viewport } from './dom.ts';
+import { findOrderId, findStoreId } from '../shared/ids.ts';
+import { scrubText } from '../shared/redact.ts';
+import type { CaptureContext, FramePayload, PagePayload, RuntimeMessage } from '../shared/types.ts';
+import { captureRoot, findOrderRoot, findScroller, redactionRects, scrollMetrics, setScrollTop, viewport } from './dom.ts';
 
-function buildPayload(): { payload: PagePayload; names: string[] } | null {
+function buildPayload(): PagePayload | null {
   const root = findOrderRoot();
   if (!root) return null;
   const text = root.innerText;
   const { snapshot, names } = parseOrder(text);
   if (!snapshot.orderId) return null;
+  return { url: location.href, snapshot, redactedText: scrubText(redactText(text, names)) };
+}
+
+/** Works on any DoorDash page, including ones whose layout the parser does not know. */
+function buildContext(): CaptureContext {
+  const root = captureRoot();
+  const text = root.innerText.slice(0, 20000);
   return {
-    names,
-    payload: {
-      url: location.href,
-      snapshot,
-      redactedText: redactText(text, names),
-      rects: computeRects(root, names),
-      viewport: viewport(),
-    },
+    orderId: findOrderId(location.href, text),
+    storeId: findStoreId(location.href, document.body.innerText.slice(0, 20000)),
+    title: document.title,
+    url: location.href,
+    safeText: scrubText(text).slice(0, 9000),
   };
-}
-
-function signature(p: PagePayload): string {
-  let h = 0;
-  for (let i = 0; i < p.redactedText.length; i++) h = (h * 31 + p.redactedText.charCodeAt(i)) | 0;
-  return `${p.snapshot.orderId}:${h}`;
-}
-
-let lastSent = '';
-let timer: number | undefined;
-
-function check(): void {
-  const built = buildPayload();
-  if (!built) {
-    lastSent = '';
-    return;
-  }
-  const sig = signature(built.payload);
-  if (sig === lastSent) return;
-  lastSent = sig;
-  const msg: RuntimeMessage = { type: 'ORDER_DETECTED', payload: built.payload };
-  chrome.runtime.sendMessage(msg).catch(() => {});
 }
 
 /** Optionally scrolls the sheet, waits for it to settle, then measures where personal details sit on screen. */
 async function frame(top: number | null): Promise<FramePayload | null> {
-  const root = findOrderRoot();
-  if (!root) return null;
+  const root = captureRoot();
   const scroller = findScroller(root);
   if (top !== null) {
     setScrollTop(scroller, top);
     await new Promise((r) => setTimeout(r, 350));
   }
   const { names } = parseOrder(root.innerText);
-  return { ...scrollMetrics(scroller), rects: computeRects(root, names), viewport: viewport() };
+  return { ...scrollMetrics(scroller), rects: redactionRects(root, names), viewport: viewport() };
 }
 
-function start(): void {
-  new MutationObserver(() => {
-    window.clearTimeout(timer);
-    timer = window.setTimeout(check, 900);
-  }).observe(document.body, { childList: true, subtree: true, characterData: true });
-  check();
-
+// The background worker may inject this file again on demand, so only listen once per page.
+const flag = window as unknown as { __korefiReader?: boolean };
+if (!flag.__korefiReader) {
+  flag.__korefiReader = true;
   chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse) => {
     if (msg.type === 'GET_PAYLOAD') {
-      sendResponse(buildPayload()?.payload ?? null);
+      sendResponse(buildPayload());
+    } else if (msg.type === 'GET_CAPTURE_CONTEXT') {
+      sendResponse(buildContext());
     } else if (msg.type === 'SCROLL_FRAME') {
       void frame(msg.top).then(sendResponse, () => sendResponse(null));
       return true;
     }
     return false;
   });
-}
-
-// The background worker may inject this file again on demand, so only start once per page.
-const flag = window as unknown as { __korefiReader?: boolean };
-if (!flag.__korefiReader) {
-  flag.__korefiReader = true;
-  start();
 }

@@ -2,3 +2,5 @@ node_modules
 .browsers
 test/out
 e2e/out
+.env
+.env.*
