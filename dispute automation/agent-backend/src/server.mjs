@@ -73,7 +73,7 @@ async function handle(req,res){
   if(req.method==='POST'&&route==='/v1/disputes/confirm'){
    const body=await jsonBody(req);
    const storeId=requiredString(body.store_id,'store_id',128);
-   if(storeId!=='unresolved')validateStore(storeId);
+   validateStore(storeId); // A real DoorDash store must be identified before logging a submitted dispute.
    const actor=requiredString(body.operator_id,'operator_id',128);
    const p={storeId,orderId:requiredString(body.order_id,'order_id',128),disputeText:requiredString(body.dispute_text,'dispute_text',6000),submittedAt:parseIso(body.disputed_at,'disputed_at')};
    const {db}=connections();
