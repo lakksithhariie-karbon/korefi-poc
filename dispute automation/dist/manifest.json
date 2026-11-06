@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "KoreFi Dispute Assistant",
+  "version": "0.3.0",
+  "description": "Capture an open DoorDash order, ask questions, draft a dispute, and confirm manual filing.",
+  "permissions": ["sidePanel", "storage", "unlimitedStorage", "activeTab", "scripting"],
+  "host_permissions": ["https://*.doordash.com/*", "https://api.openai.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {"service_worker":"background.js"},
+  "side_panel": {"default_path":"sidepanel.html"},
+  "action": {"default_title":"KoreFi Dispute Assistant"},
+  "content_scripts": [{
+    "matches":["https://*.doordash.com/*"],
+    "js":["content.js"],
+    "run_at":"document_idle"
+  }],
+  "content_security_policy": {"extension_pages":"script-src 'self'; object-src 'self'; img-src 'self' data: https://www.korefi.ai;"}
+}
