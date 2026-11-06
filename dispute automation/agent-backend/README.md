@@ -13,8 +13,6 @@ Environment:
 - `KOREFI_AGENT_TOKEN` (random secret, at least 32 chars)
 - `DATABASE_URL` (Neon role with read/write only in `dispute_automation`)
 - `HISTORY_DATABASE_URL` (Neon read-only role scoped to `doordash`)
-- `PILOT_STORE_IDS` (comma-separated allowed DoorDash stores)
-- `PILOT_TENANT_ID` (one fixed tenant for POC)
 - `OPENAI_API_KEY` (server-side key, needed for investigations)
 - `OPENAI_MODEL` (optional, defaults `gpt-4.1-mini`)
 - `ALLOWED_EXTENSION_ORIGINS` (comma-separated Chrome extension origins after extension IDs are known)
@@ -22,8 +20,8 @@ Environment:
 Endpoints:
 - `GET /healthz` public liveness
 - `GET /readyz` bearer-authenticated role checks + model setup status
-- `POST /v1/investigations` bearer-authenticated, inputs: `operator_id`, `store_id`, `order_id`, `order_url`, `issue_category`, `issue_description`, `dispute_amount`, `structured_facts`, `redacted_page_text`, optional redacted `screenshot`. Persists case, agent investigation, tool call metadata. Image bytes not saved in database.
-- `POST /v1/disputes/confirm` bearer-authenticated, inputs: `operator_id`, `store_id`, `order_id`, `dispute_text`, `disputed_at` (ISO with timezone). This is an operator attestation, not DoorDash submission. Duplicate confirmations are idempotent.
+- `POST /v1/investigations` bearer-authenticated, inputs: `operator_id`, optional `store_id`, `order_id`, `order_url`, `issue_category`, `issue_description`, `dispute_amount`, `structured_facts`, `redacted_page_text`, optional redacted `screenshot`. Persists case, agent investigation, tool call metadata. Image bytes not saved in database.
+- `POST /v1/disputes/confirm` bearer-authenticated, inputs: `operator_id`, optional `store_id`, `order_id`, `dispute_text`, `disputed_at` (ISO with timezone). This is an operator attestation, not DoorDash submission. Duplicate confirmations are idempotent.
 
 The backend uses read-only tools scoped to the current store: order financials, error charges, order issue reports, store issue frequencies and prior KoreFi cases. Historic error frequency is NOT a dispute win rate; missing historical outcomes must be described as unknown.
 

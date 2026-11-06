@@ -1,12 +1,11 @@
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { connections,checkDb,upsertCase,confirmSubmission } from './data.mjs';
+import { connections,checkDb,upsertCase,confirmSubmission,resolveStoreFromOrder } from './data.mjs';
 import { HttpError,sanitizeCapture,validateStore,requiredString,parseIso,readToken } from './validation.mjs';
 import { investigate } from './agent.mjs';
 
 const PORT=Number(process.env.PORT||10000);
-const tenant=process.env.PILOT_TENANT_ID||'korefi-internal-poc';
-const stores=new Set((process.env.PILOT_STORE_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
+const tenant='korefi-internal-poc'; // Single internal tenant, real tenant auth required before rollout.
 const allowedOrigins=new Set((process.env.ALLOWED_EXTENSION_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean));
 function respond(res,code,data){
  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
@@ -43,14 +42,15 @@ async function handle(req,res){
   auth(req);
   if(req.method==='GET'&&route==='/readyz'){
    const ok=await checkDb();
-   return respond(res,200,{ok,db:ok?'connected':'unavailable',model_configured:!!process.env.OPENAI_API_KEY,allowed_stores:stores.size});
+   return respond(res,200,{ok,db:ok?'connected':'unavailable',model_configured:!!process.env.OPENAI_API_KEY,store_restrictions:'derived_from_order'});
   }
   if(req.method==='POST'&&route==='/v1/investigations'){
    if(!process.env.OPENAI_API_KEY)throw new HttpError(503,'AI provider not configured');
    const body=await jsonBody(req), p=sanitizeCapture(body);
-   validateStore(p.storeId,stores);
+   validateStore(p.storeId);
    const actor=requiredString(body.operator_id,'operator_id',128);
    const {db,history}=connections();
+   p.storeId=p.storeId||(await resolveStoreFromOrder(history,p.orderId))||'unresolved';
    const c=await upsertCase(db,tenant,actor,p);
    const run=await db.query(
     "INSERT INTO dispute_automation.investigations(case_id,agent_runtime,model_id,status) VALUES($1,'pi',$2,'running') RETURNING id",
@@ -63,7 +63,7 @@ async function handle(req,res){
       [runId,result.recommendation,result.reasoning_summary,JSON.stringify(result.missing_evidence),result.draft_text,result.risk_notes]);
     const status=result.recommendation==='dispute'?'ready_to_dispute':'captured';
     await db.query('UPDATE dispute_automation.cases SET case_status=$2,updated_at=now() WHERE id=$1',[c.id,status]);
-    return respond(res,200,{case_id:c.id,investigation_id:runId,...result});
+    return respond(res,200,{case_id:c.id,investigation_id:runId,store_id:p.storeId,order_id:p.orderId,...result});
    }catch(err){
     await db.query("UPDATE dispute_automation.investigations SET status='failed',error_summary=$2,completed_at=now() WHERE id=$1",[runId,String(err.message||err).slice(0,300)]).catch(()=>{});
     await db.query("UPDATE dispute_automation.cases SET case_status='captured',updated_at=now() WHERE id=$1",[c.id]).catch(()=>{});
@@ -73,7 +73,7 @@ async function handle(req,res){
   if(req.method==='POST'&&route==='/v1/disputes/confirm'){
    const body=await jsonBody(req);
    const storeId=requiredString(body.store_id,'store_id',128);
-   validateStore(storeId,stores);
+   if(storeId!=='unresolved')validateStore(storeId);
    const actor=requiredString(body.operator_id,'operator_id',128);
    const p={storeId,orderId:requiredString(body.order_id,'order_id',128),disputeText:requiredString(body.dispute_text,'dispute_text',6000),submittedAt:parseIso(body.disputed_at,'disputed_at')};
    const {db}=connections();

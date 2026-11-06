@@ -24,7 +24,7 @@ export function parseIso(v,name){
 export function sanitizeCapture(x){
   if(!x||typeof x!=='object'||Array.isArray(x))throw new HttpError(422,'Expected object');
   if(x.platform!==undefined&&x.platform!=='doordash')throw new HttpError(422,'DoorDash only');
-  const storeId=requiredString(x.store_id,'store_id',128),orderId=requiredString(x.order_id,'order_id',128);
+  const storeId=optionalString(x.store_id,128),orderId=requiredString(x.order_id,'order_id',128);
   const orderUrl=optionalString(x.order_url,2000);
   if(orderUrl&&!/^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com(?:\/|$)/i.test(orderUrl))throw new HttpError(422,'Invalid DoorDash URL');
   const facts=x.structured_facts??{};
@@ -32,13 +32,13 @@ export function sanitizeCapture(x){
   const screenshot=x.screenshot??null;
   if(screenshot!==null&&(typeof screenshot!=='string'||screenshot.length>5500000||!/^data:image\/(png|jpeg);base64,[a-zA-Z0-9+/=]+$/.test(screenshot)))throw new HttpError(422,'Invalid screenshot');
   return {storeId,orderId,orderUrl,issueCategory:optionalString(x.issue_category,256),
-    issueDescription:optionalString(x.issue_description,4000),amount:money(x.dispute_amount),
+    issueDescription:optionalString(x.issue_description,4000),operatorQuestion:optionalString(x.operator_question,1200),amount:money(x.dispute_amount),
     facts,redactedText:optionalString(x.redacted_page_text,12000),screenshot,
     captureStatus:x.capture_status==='complete'?'complete':x.capture_status==='partial'?'partial':'data_only'};
 }
-export function validateStore(id,allowed){
-  if(!allowed.size)throw new HttpError(503,'No pilot outlets configured');
-  if(!allowed.has(id))throw new HttpError(403,'Store not authorized');
+export function validateStore(storeId){
+ if(storeId!==null&&storeId!==undefined&&!/^[0-9]{3,32}$/.test(storeId))throw new HttpError(422,'Invalid DoorDash store ID');
+ return storeId||null;
 }
 export function parseAgentOutput(text){
   const clean=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');

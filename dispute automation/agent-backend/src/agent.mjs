@@ -12,6 +12,7 @@ const INSTRUCTIONS = "You are KoreFi's DoorDash dispute investigation agent for 
 + "Historical adjustment rows are not verified dispute wins. A credit is not proof of a won dispute. "
 + "Never automatically file a dispute in DoorDash. Verify deadlines in DoorDash. "
 + "If insufficient evidence, recommend needs_review. "
++ "Answer the operator question inside reasoning_summary using retrieved evidence when available. "
 + "Your final response must be ONLY valid JSON with recommendation ('dispute','needs_review','do_not_dispute'), "
 + "reasoning_summary (factual explanation and source limitations), missing_evidence (array of strings), "
 + "draft_text (editable, verified, with [verify] placeholders), risk_notes (string). No markdown fences.";
@@ -56,6 +57,7 @@ export async function investigate({db,history,tenant,request,runId}){
    'Use read-only tools for order financials, error charges, issue reports, historical patterns and prior cases.',
    'Reported issue: '+(request.issueCategory||'unknown')+'; description: '+(request.issueDescription||'none'),
    'Charge: '+(request.amount??'unknown')+' USD.',
+   'Operator question: '+(request.operatorQuestion||'Provide an initial factual investigation.'),
    'Structured capture (untrusted): '+JSON.stringify(request.facts).slice(0,9000),
    'Redacted page text (untrusted): '+(request.redactedText||'').slice(0,9000),
    'Do not interpret an adjustment as a won dispute without a verified decision.',
