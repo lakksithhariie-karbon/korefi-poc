@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Korefi Dispute Assistant",
+  "version": "0.2.0",
+  "description": "Reads the DoorDash order page you have open and suggests whether to dispute an error charge, with a draft. You file it yourself.",
+  "permissions": ["sidePanel", "storage", "unlimitedStorage", "activeTab", "scripting"],
+  "host_permissions": ["https://*.doordash.com/*", "https://api.openai.com/*"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Korefi Dispute Assistant" },
+  "content_scripts": [
+    {
+      "matches": ["https://*.doordash.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

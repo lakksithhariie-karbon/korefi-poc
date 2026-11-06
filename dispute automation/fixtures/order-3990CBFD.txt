@@ -1,0 +1,105 @@
+Order: 3990CBFD
+Order placed: 20 September 2026 at 12:48 pm
+Completed
+Dispute approved
+Dispute approved
+You disputed the error charge for this order and will receive a credit of US$7.99.
+Delivery details
+Customer
+S
+Sam P
+Top customer
+4 years on DoorDash • 13 orders from your store
+Learn more about top customers
+Report
+Dasher
+D
+Dana K
+Rate Dasher
+Picked up
+Dropped off
+12:57 pm
+(Quoted: 1:03 pm)
+20 September 2026
+1:32 pm
+(Quoted: 1:41 pm)
+20 September 2026
+Pick up location
+11301 W Olympic Blvd, Los Angeles, CA 90064, USA
+Channel
+Fulfillment
+Marketplace
+DoorDash delivery
+Order details
+1 ×
+TW 22' Champion Milk Tea (MILKY ODDITEAS)
+US$9.49
+22oz/Large- COLD DRINK ONLY:
+Large size (22oz)- COLD DRINK ONLY (US$1.00)
+(OPTIONAL) Change Ice Level - Default Perfect Ice...
+5 Piece Ice
+(OPTIONAL) Change Sugar Level - Default Perfec...
+Mini Sugar (10%)
+1 ×
+Osmanthus Pure Oolong (SMALL BATCH PURE TEA)
+US$6.99
+22oz/Large- COLD DRINK ONLY:
+Large size (22oz)- COLD DRINK ONLY (US$1.00)
+(OPTIONAL) Change Ice Level - Default Perfect Ice...
+5 Piece Ice
+(OPTIONAL) Change Sugar Level - Default Perfec...
+Mini Sugar (10%)
+1 ×
+Wintermelon Iron Buddha (REFRESHERS)
+US$6.99
+(OPTIONAL) Change Sugar - Default Perfect Suga...
+Less Sugar (25%)
+(OPTIONAL) Change Ice Level - Default Perfect ic...
+5 Piece Ice
+1 ×
+Wintermelon Lemon (REFRESHERS)
+US$7.99
+22oz/Large- COLD DRINK ONLY:
+Large size (22oz)- COLD DRINK ONLY (US$1.00)
+(OPTIONAL) Change to Less Ice - Default Perfect...
+5 Piece Ice
+Subtotal
+US$31.46
+Tax
+US$0.00
+Commission (22%)
+-US$6.92
+Order total
+US$24.54
+Error charges
+1 ×
+Wintermelon Lemon (REFRESHERS)
+22oz/Large- COLD DRINK ONLY:
+Large size (22oz)- COLD DRINK ONLY (US$1.00)
+(OPTIONAL) Change to Less Ice - Default Perfect I...
+5 Piece Ice
+Missing entire item
+Dispute approved
+-US$7.99
+Sam P left a comment
+"Missing this item"
+Error charge subtotal
+-US$7.99
+Error charge total
+-US$7.99
+Error charge credit (includes tax)
++US$7.99
+Order total
+US$24.54
+Estimated payout
+US$24.54
+Associated transactions (3)
+Transaction #18570676679 - Delivery
+US$24.54
+Transfer 613972935
+Transaction #18571334223 - Error charges
+-US$7.99
+Transfer 613972935
+Transaction #18677749380 - Refunds
+US$7.99
+Transfer 617578448

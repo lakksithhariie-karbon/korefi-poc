@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Korefi Dispute Assistant</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <link rel="stylesheet" href="ops.css">
+</head>
+<body>
+  <header>
+    <h1>Dispute Assistant</h1>
+    <button id="capture-toggle" class="pill off" type="button" aria-pressed="false" title="Turn automatic capture of DoorDash order pages on or off">Capture off</button>
+    <button id="settings-btn" class="icon" type="button" aria-label="Settings" aria-expanded="false">⚙</button>
+  </header>
+
+  <section id="settings" hidden>
+    <label>OpenAI API key
+      <input id="api-key" type="password" autocomplete="off" placeholder="sk-...">
+    </label>
+    <label>Model <small>(blank uses the SDK default)</small>
+      <input id="model" type="text" autocomplete="off" placeholder="e.g. a vision-capable model">
+    </label>
+    <label>API base URL <small>(optional, for a proxy)</small>
+      <input id="base-url" type="text" autocomplete="off" placeholder="https://api.openai.com/v1">
+    </label>
+    <p class="hint">Saved in Chrome storage on this computer only. Good for a pilot on your own machine. Move the key behind a server before anyone else uses this.</p>
+    <button id="save-settings" class="primary" type="button">Save</button>
+  </section>
+
+  <div id="banner" role="status" hidden></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tab-chat" data-tab="chat" aria-selected="true">Chat</button>
+    <button role="tab" id="tab-cases" data-tab="cases" aria-selected="false">Cases</button>
+  </nav>
+
+  <main id="chat">
+    <div id="messages" aria-live="polite"></div>
+    <form id="composer">
+      <button id="capture-now" type="button" title="Capture the order page on the current tab">Capture now</button>
+      <input id="input" type="text" autocomplete="off" placeholder="Ask about this order" aria-label="Message">
+      <button class="primary" type="submit">Send</button>
+    </form>
+  </main>
+
+  <main id="cases" hidden>
+    <div class="toolbar"><span id="case-count"></span><button id="export" type="button">Export CSV</button></div>
+    <ul id="case-list"></ul>
+  </main>
+
+  <div id="lightbox" hidden><img alt="Captured order page, enlarged"></div>
+  <script src="sidepanel.js"></script>
+  <script src="ops.js"></script>
+</body>
+</html>

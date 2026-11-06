@@ -1,0 +1,25 @@
+{
+  "name": "korefi-dispute-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight Chrome side-panel assistant that captures a DoorDash order page and drafts dispute suggestions.",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/",
+    "e2e": "PLAYWRIGHT_BROWSERS_PATH=$PWD/.browsers node e2e/run.mjs"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.21.0",
+    "openai": "^7.51.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "playwright": "^1.64.1",
+    "typescript": "^7.0.2"
+  }
+}
