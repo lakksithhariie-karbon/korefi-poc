@@ -14,8 +14,6 @@ const DISPUTE_CHIP = /^Dispute (approved|denied|rejected|declined|pending|in rev
 const REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
 const TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
 const QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-const PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$|^\d+ orders?$/i;
-const UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
 
 const MONTHS: Record<string, number> = {
   january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
@@ -90,7 +88,7 @@ function parseItem(e: Entry): ItemLine {
   return { qty: e.qty, name, options, price };
 }
 
-function parseErrorEntry(e: Entry, names: string[]): ErrorCharge {
+function parseErrorEntry(e: Entry): ErrorCharge {
   const out: ErrorCharge = {
     item: '', options: [], reason: null, disputeStatus: null, amount: null, customerComment: null,
   };
@@ -100,7 +98,6 @@ function parseErrorEntry(e: Entry, names: string[]): ErrorCharge {
     if (isMoneyLine(l)) {
       if (out.amount === null) out.amount = parseMoney(l);
     } else if (commenter) {
-      names.push(commenter[1]);
       expectComment = true;
     } else if (expectComment) {
       out.customerComment = l.replace(/^["“”']+|["“”']+$/g, '');
@@ -128,7 +125,6 @@ export function parseOrder(rawText: string): ParsedOrder {
     return -1;
   };
 
-  const names: string[] = [];
   const iOrder = find((l) => /^Order:\s*\S+/.test(l));
   const orderId = iOrder >= 0 ? lines[iOrder].replace(/^Order:\s*/, '').trim() : '';
   const iPlaced = find((l) => /^Order placed:/i.test(l));
@@ -152,23 +148,6 @@ export function parseOrder(rawText: string): ParsedOrder {
   const iCustomer = find((l) => l === 'Customer', iDelivery, dEnd);
   const iDasher = find((l) => l === 'Dasher', iDelivery, dEnd);
   const iPicked = find((l) => l === 'Picked up', iDelivery, dEnd);
-  const nameAfter = (from: number, to: number): string | null => {
-    for (let i = from + 1; i < to; i++) {
-      const l = lines[i];
-      if (l.length <= 1 || UI_NOISE.test(l) || PROFILE_NOISE.test(l)) continue;
-      return l;
-    }
-    return null;
-  };
-  if (iCustomer >= 0) {
-    const n = nameAfter(iCustomer, iDasher > iCustomer ? iDasher : iPicked > iCustomer ? iPicked : dEnd);
-    if (n) names.push(n);
-  }
-  if (iDasher >= 0) {
-    const n = nameAfter(iDasher, iPicked > iDasher ? iPicked : dEnd);
-    if (n) names.push(n);
-  }
-
   const pairs: TimePair[] = [];
   for (let i = Math.max(iPicked, iDelivery, 0); i < dEnd; i++) {
     if (!TIME.test(lines[i])) continue;
@@ -193,7 +172,7 @@ export function parseOrder(rawText: string): ParsedOrder {
 
   // Error charges.
   const errBlock = iErr >= 0 ? lines.slice(iErr + 1, iErrSub >= 0 ? iErrSub : iAssoc >= 0 ? iAssoc : lines.length) : [];
-  const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e, names));
+  const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e));
   const tailFrom = iErrSub >= 0 ? iErrSub : iErr >= 0 ? iErr : 0;
 
   // Associated transactions.
@@ -232,24 +211,5 @@ export function parseOrder(rawText: string): ParsedOrder {
     transactions,
   };
 
-  return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** Removes personal names, customer profile lines and avatar initials from page text. Names match whole words only. */
-export function redactText(text: string, names: string[]): string {
-  // Whitespace is folded first so a name written with a non-breaking space still matches.
-  let out = text
-    .split(/\r?\n/)
-    .map((l) => l.replace(/\s+/g, ' ').trim())
-    .filter((l) => l.length > 0)
-    .filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l))
-    .join('\n');
-  for (const n of [...names].sort((a, b) => b.length - a.length)) {
-    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(n)}(?![A-Za-z0-9])`, 'g'), '[PERSON]');
-  }
-  return out;
+  return { snapshot };
 }

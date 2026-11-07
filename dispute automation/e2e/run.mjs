@@ -18,7 +18,7 @@ mkdirSync(out, { recursive: true });
 
 const fixture = readFileSync(path.join(root, 'fixtures', 'order-3990CBFD-open.txt'), 'utf8').split('\n').filter(Boolean);
 const uberFixture = readFileSync(path.join(root, 'fixtures', 'ubereats-D2D46.txt'), 'utf8').split('\n').filter(Boolean);
-// Marker colours: personal details are drawn in magenta (faces) and cyan (names), so a test can prove none reach an image.
+// Marker colours: faces are magenta and names cyan, so a test can prove they reach the image exactly as shown.
 // The customer photo is solid orange, so a test can prove it arrives intact.
 const svg = (body, w, h) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${body}</svg>`)}`;
 const FACE = svg('<circle cx="22" cy="22" r="22" fill="#ff00ff"/>', 44, 44);
@@ -72,7 +72,7 @@ function changedPage() {
       <div class="line">Picked up</div>${filler}</div></body></html>`;
 }
 
-/** A page with nothing that marks where personal details are. It must never be screenshotted. */
+/** A page the order parser does not know at all. It is still screenshotted as shown. */
 function unknownPage() {
   const filler = Array.from({ length: 40 }, (_, i) => `<div class="line">Something else ${i + 1}</div>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>Other</title>${STYLE}</head><body><h1>Other</h1>
@@ -80,11 +80,13 @@ function unknownPage() {
 }
 
 /**
- * An Uber Eats Manager order drawer: a fixed panel with no dialog role, Base Web markers, the customer at the top in
- * fields marked fs-mask, a courier card with a face photo, and a customer photo under the feedback.
+ * An Uber Eats Manager order drawer: a fixed panel with no dialog role, Base Web markers, the customer at the top, a
+ * courier card with a face photo, and a customer photo under the feedback. Like the live order C6005, Uber's fs-mask
+ * marker sits on the customer and on the whole item list and money section, which v0.10 wrongly blacked out.
  */
 function uberPage() {
   const L = uberFixture;
+  let open = false;
   const parts = [
     `<div class="row"><span class="av fs-mask pii">${L[0]}</span><div><div class="fs-mask pii">${esc(L[1])}</div><div class="sub">${esc(L[2])}</div></div></div>`,
   ];
@@ -93,6 +95,9 @@ function uberPage() {
     if (l === 'YOUWEI') {
       parts.push(`<div class="row" style="height:56px"><img alt="" src="${FACE}" style="width:44px;height:44px;border-radius:50%"><span class="pii">${l}</span><span class="chip">${L[i + 1]}</span><span class="chip">${L[i + 2]}</span><span class="chip">${L[i + 3]}</span></div>`);
       i += 3;
+    } else if (l === 'Order details') {
+      parts.push(`<div class="line">${l}</div><div class="fs-mask">`);
+      open = true;
     } else if (l === 'Customer feedback') {
       parts.push(`<div class="label">${l}</div><div class="line">${esc(L[i + 1])}</div><img alt="" src="${PHOTO(330, 300)}" style="width:330px;height:300px;border-radius:8px;display:block"><div class="line">${L[i + 2]}</div>`);
       i += 2;
@@ -100,16 +105,14 @@ function uberPage() {
       parts.push(`<div class="line">${esc(l)}</div>`);
     }
   }
+  if (open) parts.push('</div>');
   return `<!doctype html><html><head><meta charset="utf-8"><title>Uber Eats Manager</title>${STYLE}<style>.pii{color:#00e5ff;font-weight:700;font-size:18px}</style></head>
     <body><div data-baseweb="block"><h1>Orders</h1></div>
     <div data-baseweb="block" style="position:fixed;right:0;top:0;width:500px;height:100vh;display:flex;background:#fff">
       <div style="overflow:auto;width:100%;padding:16px;box-sizing:border-box">${parts.join('')}</div></div></body></html>`;
 }
 
-/**
- * The real pickup order that failed: no courier, "27 orders" under the name, and the name written the way the live page
- * writes it, with a non-breaking space and the last initial in its own element, so no single text node holds "Jeff J".
- */
+/** The live pickup order 5DE2A: no courier, "27 orders" under the name, the name split with a non-breaking space. */
 function uberPickupPage() {
   const L = pickupFixture;
   const parts = [
@@ -278,11 +281,11 @@ try {
       return { w: bmp.width, h: bmp.height, magenta, cyan, orange: orange / (data.length / 4) };
     }, dataUrl);
 
-  // 0. There is no code path for an unredacted screenshot.
+  // 0. Nothing is masked: the built worker never paints over a screenshot.
   const bg = readFileSync(path.join(root, 'dist', 'background.js'), 'utf8');
-  check('built worker has no unredacted or generic fallback', !/[Uu]nredacted|takeGenericScreenshot/.test(bg));
+  check('built worker draws no black boxes', !/fillRect|fillStyle/.test(bg));
 
-  // 1. Full order page: capture, full height, redaction, scroll restored.
+  // 1. Full order page: capture, full height, nothing masked, scroll restored.
   const order = await context.newPage();
   await order.goto(`http://localhost:${portalPort}/`);
   await order.evaluate(() => { document.querySelector('[class*=SidesheetBody]').scrollTop = 300; });
@@ -300,9 +303,9 @@ try {
   const shot1 = await inspect(c1.image);
   const expected = sheet.full / sheet.width;
   check('screenshot covers the whole sheet', Math.abs(shot1.h / shot1.w - expected) / expected < 0.08, `${JSON.stringify(shot1)} expected ratio ${expected.toFixed(2)}`);
-  check('Customer and Dasher blocks are blacked out', shot1.bands >= 2, JSON.stringify(shot1));
+  check('DoorDash screenshot has no black boxes', shot1.bands === 0, JSON.stringify(shot1));
   check('scroll position is restored', (await order.evaluate(() => document.querySelector('[class*=SidesheetBody]').scrollTop)) === 300);
-  check('no names in stored text or snapshot', !/Sam P|Dana K/.test(c1.redactedText + JSON.stringify(c1.snapshot)));
+  check('DoorDash page text keeps the customer and Dasher names', /Sam P/.test(c1.redactedText) && /Dana K/.test(c1.redactedText));
   check('DoorDash: the customer photo is found and kept at full size', c1.photos?.length === 1 && (await colours(c1.photos[0])).orange > 0.6, JSON.stringify(c1.photos?.length));
   check('DoorDash capture is marked as DoorDash', c1.platform === 'doordash');
   writeFileSync(path.join(out, 'captured-full.jpg'), Buffer.from(c1.image.split(',')[1], 'base64'));
@@ -322,8 +325,8 @@ try {
   const opened = pi.bodies.find((b) => b.url === '/v1/conversations');
   const openedBody = opened && JSON.parse(opened.raw);
   check('chat is opened with the order and no store ID', !!openedBody && openedBody.order_id === '3990CBFD' && openedBody.store_id === null);
-  check('redacted screenshot slices uploaded once, as JPEG', !!openedBody && openedBody.screenshots.length >= 2 && openedBody.screenshots.every((x) => x.startsWith('data:image/jpeg;base64,')), String(openedBody?.screenshots?.length));
-  check('open request contains no personal names', !!opened && !/Sam P|Dana K/.test(opened.raw));
+  check('screenshot slices uploaded once, as JPEG', !!openedBody && openedBody.screenshots.length >= 2 && openedBody.screenshots.every((x) => x.startsWith('data:image/jpeg;base64,')), String(openedBody?.screenshots?.length));
+  check('open request carries the page as shown, names included', !!opened && /Sam P/.test(opened.raw) && /Dana K/.test(opened.raw));
   check('item names reach the agent (not scrubbed)', !!opened && /Wintermelon Lemon/.test(opened.raw));
   check('the customer photo goes first, and the server is told so', !!openedBody && openedBody.screenshots[0] === c1.photos[0] && openedBody.structured_facts.attached_images?.customer_photos === 1 && openedBody.platform === 'doordash');
   const msg1 = pi.bodies.find((b) => b.url.endsWith('/messages'));
@@ -391,15 +394,15 @@ try {
   await changed.goto(`http://127.0.0.1:${portal2Port}/changed?orderId=ZXCV9876&storeId=555123`);
   const c2 = await capture(changed, `http://127.0.0.1:${portal2Port}/*`);
   check('unknown layout is captured, store ID read from the address', !!c2 && c2.orderId === 'ZXCV9876' && c2.storeId === '555123', `${c2?.orderId} ${c2?.storeId}`);
-  check('unknown layout screenshot is redacted', !!c2?.image && (await inspect(c2.image)).bands >= 1, String(c2?.imageNote));
-  check('unknown layout text has no names', !!c2 && !/Pat Q|Lee R/.test(c2.redactedText));
+  check('unknown layout screenshot is taken with no black boxes', !!c2?.image && (await inspect(c2.image)).bands === 0, String(c2?.imageNote));
+  check('unknown layout text keeps the names', !!c2 && /Pat Q/.test(c2.redactedText) && /Lee R/.test(c2.redactedText));
   await panel.waitForSelector('#attachment:not([hidden])');
   await panel.fill('#prompt', 'Check this one');
   await panel.press('#prompt', 'Enter');
   await waitFor(() => agentCalls.length > 3, 40000);
   check('a second chat is opened with the known store ID', store.conversations.length === 2 && agentCalls[3].request.storeId === '555123');
   check('the second chat starts a fresh conversation', agentCalls[3].transcript.length === 0);
-  check('second chat request has no names', !pi.bodies.filter((b) => b.url.startsWith('/v1/conversations')).some((b) => /Pat Q|Lee R/.test(b.raw)));
+  check('second chat request carries the page as shown', pi.bodies.filter((b) => b.url.startsWith('/v1/conversations')).some((b) => /Pat Q/.test(b.raw)));
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
 
   // 8. History: newest first; open the older chat; it is disputed, so it stays read-only.
@@ -415,20 +418,20 @@ try {
   check('a disputed chat does not take new questions', await waitFor(async () => /marked as disputed/.test(await panel.locator('.agent-message .agent-text').last().innerText().catch(() => ''))) !== null);
   check('no extra agent run was started', agentCalls.length === 4);
 
-  // 9. A page with no sign of where personal details are: no screenshot, a placeholder order ID, and the chat still works.
+  // 9. A page the parser does not know: still screenshotted, a placeholder order ID, and the chat still works.
   await panel.click('#newChat');
   const unknown = await context.newPage();
   await unknown.goto(`http://localhost:${portalPort}/unknown`);
   const c3 = await capture(unknown, `http://localhost:${portalPort}/unknown`);
-  check('page with no redaction anchors is captured as data only', !!c3 && c3.image === null && /No screenshot/.test(c3.imageNote || ''), c3?.imageNote);
+  check('unknown page is screenshotted as shown', !!c3?.image && (await inspect(c3.image)).bands === 0, c3?.imageNote);
   check('placeholder order ID is used', !!c3 && c3.orderId.startsWith('SCREENSHOT-'), c3?.orderId);
   await panel.waitForSelector('#caseMeta:not([hidden])');
   check('operator is asked for the order ID', true);
-  check('no attachment when no screenshot', await panel.locator('#attachment').isHidden());
+  check('the screenshot is attached', await panel.locator('#attachment').isVisible());
   await panel.fill('#prompt', 'Anything we can do?');
   await panel.press('#prompt', 'Enter');
   await waitFor(() => agentCalls.length > 4, 40000);
-  check('data-only chat sends no images', agentCalls[4].images.length === 0 && store.conversations.at(-1) && store.images.filter((i) => i.conversation_id === store.conversations.at(-1).id).length === 0);
+  check('the chat sends the screenshot', agentCalls[4].images.length >= 1);
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
 
   // 10. A failed run explains itself without leaking internals, and leaves a note in the chat.
@@ -442,19 +445,17 @@ try {
   check('internal error detail never reaches the panel or the chat', !/internal detail/.test(await panel.content()) && !store.messages.some((m) => /internal detail/.test(m.text)));
   check('the failure is noted in the saved chat', store.messages.some((m) => m.role === 'system' && /could not answer/.test(m.text)));
 
-  // 11. No screenshot anywhere is unredacted: local cases, and the images the server holds.
-  const all = await getCases();
-  const leaks = [];
-  for (const c of all) if (c.image && (await inspect(c.image)).bands < 1) leaks.push(c.orderId);
-  check('no stored local screenshot is unredacted', leaks.length === 0, leaks.join(','));
-  const perChat = new Map();
+  // 11. No screenshot anywhere has black boxes: local cases, and the images the server holds.
+  const boxed = [];
+  for (const c of await getCases()) if (c.image && (await inspect(c.image)).bands > 0) boxed.push(c.orderId);
+  check('no stored local screenshot has black boxes', boxed.length === 0, boxed.join(','));
+  let serverBoxed = 0;
   for (const img of store.images) {
-    const info = await inspect(`data:${img.mime};base64,${Buffer.from(img.bytes).toString('base64')}`);
-    perChat.set(img.conversation_id, (perChat.get(img.conversation_id) || 0) + (info.bands > 0 ? 1 : 0));
+    if ((await inspect(`data:${img.mime};base64,${Buffer.from(img.bytes).toString('base64')}`)).bands > 0) serverBoxed++;
   }
-  check('each chat with images holds the blacked-out section on the server', [...perChat.values()].every((n) => n >= 1), JSON.stringify([...perChat]));
+  check('no image the server holds has black boxes', serverBoxed === 0, String(serverBoxed));
 
-  // 12. Uber Eats: the drawer is found without a dialog role, the customer and courier are hidden, the photo is kept.
+  // 12. Uber Eats: the drawer is found without a dialog role, everything is captured as shown, the photo is kept.
   await panel.click('#newChat');
   const uber = await context.newPage();
   await uber.goto(`http://localhost:${portalPort}/ubereats/manager/home/${UBER_STORE}/orders`);
@@ -466,14 +467,14 @@ try {
   check('Uber Eats capture is recognised', !!u && u.platform === 'ubereats' && u.orderId === 'D2D46', `${u?.platform} ${u?.orderId} ${u?.imageNote}`);
   check('Uber Eats store ID is read from the address', u?.storeId === UBER_STORE, String(u?.storeId));
   check('Uber Eats charge is read', u?.facts.errorTotal === 0.95 && u?.snapshot.errorCharges[0]?.item === 'Summer Night Black Milk Tea', JSON.stringify(u?.facts));
-  check('Uber Eats text has no customer or courier names', !!u && !/M\.E\. G|YOUWEI/.test(u.redactedText + JSON.stringify(u.snapshot)));
+  check('Uber Eats text keeps the customer and courier names', !!u && /M\.E\. G/.test(u.redactedText) && /YOUWEI/.test(u.redactedText));
   check('Uber Eats customer feedback is kept as evidence', /barely even tastes like tea/.test(u?.redactedText || ''));
   const uShot = u?.image ? await colours(u.image) : null;
   check('Uber Eats page screenshot is taken', !!uShot, String(u?.imageNote));
-  check('Uber Eats screenshot shows no face and no name', !!uShot && uShot.magenta < 20 && uShot.cyan < 20, JSON.stringify(uShot));
+  check('Uber Eats screenshot shows the face and names as on the page', !!uShot && uShot.magenta > 300 && uShot.cyan > 50, JSON.stringify(uShot));
+  check('Uber Eats items and money marked private by Uber are not blacked out (order C6005)', !!u?.image && (await inspect(u.image)).bands === 0);
   const uPhoto = u?.photos?.[0] ? await colours(u.photos[0]) : null;
-  check('Uber Eats customer photo is captured on its own, at full size', u?.photos?.length === 1 && !!uPhoto && uPhoto.orange > 0.6 && uPhoto.w >= 300, JSON.stringify(uPhoto));
-  check('Uber Eats photo carries no face or name', !!uPhoto && uPhoto.magenta < 20 && uPhoto.cyan < 20);
+  check('Uber Eats customer photo is captured on its own, at full size, even inside a private-marked part', u?.photos?.length === 1 && !!uPhoto && uPhoto.orange > 0.6 && uPhoto.w >= 300, JSON.stringify(uPhoto));
   check('Uber Eats scroll position is restored', (await uber.evaluate(() => document.querySelector('[style*="overflow:auto"]').scrollTop)) === 120);
   await panel.waitForSelector('#attachment:not([hidden])');
   check('the attachment says a customer photo is included', /1 customer photo/.test(await panel.locator('#attachmentTitle').innerText()));
@@ -484,7 +485,7 @@ try {
   const uOpen = JSON.parse(pi.bodies.filter((b) => b.url === '/v1/conversations').at(-1).raw);
   check('Uber Eats chat is opened as Uber Eats with the photo first', uOpen.platform === 'ubereats' && uOpen.screenshots[0] === u.photos[0] && uOpen.structured_facts.attached_images.customer_photos === 1);
   check('the agent is told it is an Uber Eats order', agentCalls.at(-1).request.platform === 'ubereats');
-  check('the Uber Eats chat request has no names', !/M\.E\. G|YOUWEI/.test(pi.bodies.filter((b) => b.url.startsWith('/v1/conversations')).map((b) => b.raw).join('')));
+  check('the Uber Eats chat request carries the names as shown', /YOUWEI/.test(pi.bodies.filter((b) => b.url.startsWith('/v1/conversations')).map((b) => b.raw).join('')));
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
   await panel.waitForTimeout(400);
   await panel.screenshot({ path: path.join(out, 'panel-ubereats.png') });
@@ -496,15 +497,15 @@ try {
   writeFileSync(path.join(out, 'ubereats-captured.jpg'), Buffer.from(u.image.split(',')[1], 'base64'));
   writeFileSync(path.join(out, 'ubereats-photo.jpg'), Buffer.from(u.photos[0].split(',')[1], 'base64'));
 
-  // 13. The pickup order from the live portal: the name is split across elements with a non-breaking space.
+  // 13. The live pickup order 5DE2A: captured as shown.
   await panel.click('#newChat');
   const pickup = await context.newPage();
   await pickup.goto(`http://localhost:${portalPort}/ubereats-pickup`);
   const p = await capture(pickup, `http://localhost:${portalPort}/ubereats-pickup*`);
-  check('pickup order: a screenshot is taken (the name is found even when split)', !!p?.image && p.orderId === '5DE2A', String(p?.imageNote));
+  check('pickup order: a screenshot is taken', !!p?.image && p.orderId === '5DE2A', String(p?.imageNote));
   const pShot = p?.image ? await colours(p.image) : null;
-  check('pickup order: the name and initials are blacked out', !!pShot && pShot.cyan < 20, JSON.stringify(pShot));
-  check('pickup order: no name or order count in the text', !!p && !/Jeff|\bJJ\b|27 orders/.test(p.redactedText + JSON.stringify(p.snapshot)));
+  check('pickup order: the name and initials are shown, no black boxes', !!pShot && pShot.cyan > 50 && (await inspect(p.image)).bands === 0, JSON.stringify(pShot));
+  check('pickup order: the text keeps the name and order count', !!p && /Jeff J/.test(p.redactedText) && /27 orders/.test(p.redactedText));
   check('pickup order: no customer photo is invented', Array.isArray(p?.photos) && p.photos.length === 0);
   if (p?.image) writeFileSync(path.join(out, 'ubereats-pickup-captured.jpg'), Buffer.from(p.image.split(',')[1], 'base64'));
 

@@ -43,7 +43,7 @@ async function start({ env = {}, investigate } = {}) {
 
 const open = (s, extra = {}) => s.json('POST', '/v1/conversations', { operator_id: 'ops-1', order_id: 'ABC12345', issue_category: 'Missing item', dispute_amount: 7.99, structured_facts: { items: [] }, redacted_page_text: 'Order: ABC12345', screenshots: [jpeg('one'), jpeg('two')], ...extra });
 
-test('opening a chat stores the case and the redacted images', async () => {
+test('opening a chat stores the case and its images', async () => {
   const s = await start();
   try {
     const res = await s.call('POST', '/v1/conversations', { operator_id: 'ops-1', order_id: 'ABC12345', screenshots: [jpeg('one'), jpeg('two')] });

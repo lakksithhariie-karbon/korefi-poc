@@ -1,4 +1,3 @@
-import { COMMENTER, EMAIL, PERSON_LABELS, PHONE, STOP_LABELS } from '../shared/redact.ts';
 import type { Platform, Rect, Viewport } from '../shared/types.ts';
 
 const ORDER_HEADINGS: Record<Platform, RegExp> = {
@@ -7,13 +6,6 @@ const ORDER_HEADINGS: Record<Platform, RegExp> = {
   ubereats: /(^|\n)Order\s+[A-Z0-9]{4,16}\s*(\n|$)/,
   grubhub: /(^|\n)Order\s*#?\s*[A-Z0-9-]{4,}/,
 };
-const PROFILE_TEXT =
-  /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$|^\s*\d+\s+orders?\s*$/i;
-/** Pages join names with non-breaking spaces and line breaks; compare text with all whitespace folded to one space. */
-const fold = (s: string) => s.replace(/\s+/g, ' ').trim();
-const FALLBACK_BLOCK_HEIGHT = 170;
-/** Where the platform itself marks personal fields (FullStory masking, used by Uber Eats Manager). */
-const MASKED = '.fs-mask, [data-fs-mask], [data-private]';
 const PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-baseweb="drawer"], [role="dialog"], [aria-modal="true"]';
 const PHOTO_CONTEXT = /photo|picture|image|feedback|comment|evidence/i;
 export const MAX_PHOTOS = 3;
@@ -59,41 +51,7 @@ export function viewport(): Viewport {
   return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
 }
 
-function toRect(r: DOMRect, pad = 4): Rect {
-  return { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2 };
-}
-
-function visible(r: Rect, vp: Viewport): boolean {
-  return r.w > 0 && r.h > 0 && r.x < vp.innerWidth && r.y < vp.innerHeight && r.x + r.w > 0 && r.y + r.h > 0;
-}
-
-function textRect(node: Text): DOMRect {
-  const range = document.createRange();
-  range.selectNodeContents(node);
-  return range.getBoundingClientRect();
-}
-
-/** The text's small parent rows, so avatars next to a name are covered too. */
-function rowRect(node: Node, root: HTMLElement): DOMRect | null {
-  const start = node instanceof HTMLElement ? node : node.parentElement;
-  if (!start) return null;
-  let target: HTMLElement = start;
-  for (let i = 0; i < 2; i++) {
-    const parent: HTMLElement | null = target.parentElement;
-    if (!parent || parent === root) break;
-    const pr = parent.getBoundingClientRect();
-    if (pr.height > 80 || pr.width > root.getBoundingClientRect().width * 0.98) break;
-    target = parent;
-  }
-  return target.getBoundingClientRect();
-}
-
-const hits = (re: RegExp, text: string): boolean => {
-  re.lastIndex = 0;
-  return re.test(text);
-};
-
-// ---- pictures: customer photos are evidence; faces and avatars are personal details ----
+// ---- pictures: customer photos are evidence ----
 
 interface Picture {
   el: HTMLElement;
@@ -124,7 +82,6 @@ function pictures(root: HTMLElement): Picture[] {
 
 /** A photo the customer uploaded: a large picture, or a picture next to words like "photo" or "feedback". Never a face. */
 function isCustomerPhoto(p: Picture): boolean {
-  if (p.el.closest(MASKED)) return false;
   if (p.rect.width < 48 || p.rect.height < 48 || isRound(p.el, p.rect)) return false;
   if (p.rect.width >= 120 && p.rect.height >= 120) return true;
   for (let e = p.el.parentElement, i = 0; e && i < 4; e = e.parentElement, i++) {
@@ -140,110 +97,6 @@ export function customerPhotos(root: HTMLElement): HTMLElement[] {
     .filter(isCustomerPhoto)
     .slice(0, MAX_PHOTOS)
     .map((p) => p.el);
-}
-
-/** Pictures of people: courier faces and avatars. Small pictures that are not customer photos are hidden too, to be safe. */
-function personPictures(root: HTMLElement): DOMRect[] {
-  return pictures(root)
-    .filter((p) => !isCustomerPhoto(p) && (isRound(p.el, p.rect) || (p.rect.width <= 96 && p.rect.height <= 96)))
-    .map((p) => p.rect);
-}
-
-/**
- * Regions to black out in a screenshot of the current scroll position. Independent signals are combined:
- * known personal names, the blocks under the Customer / Dasher labels (which need no parsing), fields the platform
- * itself marks as private, pictures of people, and emails or phone numbers.
- *
- * Returns null (fail closed) when personal details cannot be located with confidence, and no screenshot is taken:
- * a name the parser found is missing from the page, or the page has no trace of where the details are.
- */
-export function redactionRects(root: HTMLElement, names: string[], platform: Platform = 'doordash'): Rect[] | null {
-  const vp = viewport();
-  const rects: Rect[] = [];
-  const found = new Set<string>();
-  const sheet = root.getBoundingClientRect();
-
-  const texts: { node: Text; text: string }[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-    const text = fold(node.textContent ?? '');
-    if (text) texts.push({ node, text });
-  }
-  const wanted = [...new Set(names.map(fold).filter(Boolean))];
-
-  let traces = 0;
-  for (const { node, text } of texts) {
-    const name = wanted.find((n) => text.includes(n));
-    if (name) found.add(name);
-    if (!name && !PROFILE_TEXT.test(text) && !COMMENTER.test(text) && !hits(EMAIL, text) && !hits(PHONE, text)) continue;
-    const row = rowRect(node, root);
-    if (row) {
-      rects.push(toRect(row));
-      traces++;
-    }
-  }
-
-  for (let i = 0; i < texts.length; i++) {
-    if (!PERSON_LABELS.has(texts[i].text.toLowerCase())) continue;
-    const label = textRect(texts[i].node);
-    let end = label.bottom + FALLBACK_BLOCK_HEIGHT;
-    for (let j = i + 1; j < texts.length; j++) {
-      if (STOP_LABELS.has(texts[j].text.toLowerCase())) {
-        end = Math.min(end, textRect(texts[j].node).top);
-        break;
-      }
-    }
-    if (end > label.bottom) {
-      rects.push({ x: sheet.left - 2, y: label.bottom + 1, w: sheet.width + 4, h: end - label.bottom - 2 });
-      traces++;
-    }
-  }
-
-  let masked = 0;
-  for (const el of root.querySelectorAll<HTMLElement>(MASKED)) {
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) continue;
-    rects.push(toRect(rowRect(el, root) ?? r));
-    masked++;
-  }
-  for (const r of personPictures(root)) rects.push(toRect(r, 2));
-
-  // A name split across elements ("Jeff <span>J</span>") is in no single text node: cover the smallest element holding all of it.
-  for (const n of wanted) {
-    if (found.has(n)) continue;
-    const el = smallestHolding(root, n);
-    if (!el) continue;
-    rects.push(toRect(rowRect(el, root) ?? el.getBoundingClientRect()));
-    found.add(n);
-    traces++;
-  }
-
-  if (wanted.some((n) => !found.has(n))) return null;
-  // Uber Eats has no Customer label to anchor on, so it needs a name or a platform-marked field before anything is captured.
-  if (platform !== 'doordash' && wanted.length === 0 && masked === 0) return null;
-  if (traces + masked === 0) return null;
-  return rects.filter((r) => visible(r, vp));
-}
-
-function smallestHolding(root: HTMLElement, name: string): HTMLElement | null {
-  let best: HTMLElement | null = null;
-  let bestLength = Infinity;
-  for (const el of root.querySelectorAll<HTMLElement>('*')) {
-    const text = fold(el.textContent ?? '');
-    if (text.length < bestLength && text.length <= name.length + 40 && text.includes(name)) {
-      best = el;
-      bestLength = text.length;
-    }
-  }
-  return best;
-}
-
-/** Text the platform marks as private, so it can be removed from page text as well as from pixels. */
-export function maskedTexts(root: HTMLElement): string[] {
-  return [...root.querySelectorAll<HTMLElement>(MASKED)]
-    .flatMap((el) => el.innerText.split('\n'))
-    .map(fold)
-    .filter((t) => t.length >= 2 && t.length <= 60);
 }
 
 function scrolls(el: HTMLElement, minHeight: number): boolean {

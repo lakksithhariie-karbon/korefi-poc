@@ -52,15 +52,14 @@ async function capture(tabId: number): Promise<void> {
     return fail(`Could not read this tab${host}. ${NEEDS_ACCESS}`);
   }
 
-  // A page the parser does not understand is still worth investigating: use what the page revealed, without personal details.
+  // A page the parser does not understand is still worth investigating: use what the page shows.
   const platform = payload?.platform ?? context?.platform ?? 'doordash';
   const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
   const snapshot = payload?.snapshot ?? { ...parseOrder(`Order: ${orderId}`).snapshot, platform };
   const redactedText = payload?.redactedText ?? context?.safeText ?? '';
 
-  const { image, note } = await takeRedactedScreenshot(tab);
-  // Customer photos are only taken when the page screenshot could be redacted: the same checks apply to each photo.
-  const photos = image && context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
+  const { image, note } = await takeScreenshot(tab);
+  const photos = context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
   const record: CaseRecord = {
     id: `${orderId}-${Date.now().toString(36)}`,
     platform,
@@ -88,17 +87,14 @@ const CAPTURE_GAP_MS = 600;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const withheld = (why: string) => ({ image: null, note: `No screenshot: ${why}` });
-const CANNOT_HIDE = 'the customer’s details could not be found to hide, so only the page text was kept.';
 const NEEDS_ACCESS = 'Chrome has not let KoreFi see this tab yet. Tap + and choose Allow when Chrome asks.';
 
 /**
- * Scrolls the order sheet one screen at a time, screenshots each screen, blacks out personal details in each one,
- * and stitches them into a single tall image. The scroll position is put back afterwards.
- *
- * There is no unredacted path. If the details cannot be located on any screen, or the page moves while capturing,
- * the whole screenshot is dropped.
+ * Scrolls the order sheet one screen at a time, screenshots each screen exactly as shown, and stitches them into a
+ * single tall image. The scroll position is put back afterwards. If the page moves while capturing, the screenshot is
+ * dropped, because the stitched image would not match the page.
  */
-async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: string | null; note: string | null }> {
+async function takeScreenshot(tab: chrome.tabs.Tab): Promise<{ image: string | null; note: string | null }> {
   if (!tab.active || tab.id === undefined || tab.windowId === undefined) {
     return { image: null, note: 'No screenshot: the order tab is not the active tab. Switch to it and capture again.' };
   }
@@ -125,13 +121,13 @@ async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: st
     let lastShot = 0;
     for (const top of tops) {
       const before = await ask(top);
-      if (!before?.rects) return withheld(CANNOT_HIDE);
+      if (!before) return withheld('the page could not be read.');
       await sleep(Math.max(0, CAPTURE_GAP_MS - (Date.now() - lastShot)));
       const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
       lastShot = Date.now();
-      // Measure again after the capture; if anything moved, the black-out boxes may be misplaced.
+      // Measure again after the capture; if the sheet moved, this screen would land in the wrong place.
       const after = await ask(null);
-      if (!after?.rects || Math.abs(after.scrollTop - before.scrollTop) > 1 || !rectsMatch(before.rects, after.rects)) {
+      if (!after || Math.abs(after.scrollTop - before.scrollTop) > 1 || !rectsMatch([before.region], [after.region])) {
         return withheld('the page moved while capturing. Leave it alone for a few seconds and capture again.');
       }
       sheet = await paintFrame(sheet, raw, before, maxTop);
@@ -149,8 +145,8 @@ async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: st
 }
 
 /**
- * Each customer photo, scrolled into view and cropped from a screenshot at full resolution, with the same black-out
- * boxes applied. A photo whose surroundings cannot be redacted, or that moves while capturing, is skipped.
+ * Each customer photo, scrolled into view and cropped from a screenshot at full resolution. A photo that moves while
+ * capturing is skipped.
  */
 async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<string[]> {
   if (tab.id === undefined || tab.windowId === undefined) return [];
@@ -161,11 +157,11 @@ async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<
     start = await askPage<FramePayload | null>(tabId, { type: 'SCROLL_FRAME', top: null });
     for (let i = 0; i < Math.min(count, 3); i++) {
       const before = await askPage<PhotoFrame | null>(tabId, { type: 'PHOTO_FRAME', index: i, scroll: true });
-      if (!before?.rects) continue;
+      if (!before) continue;
       await sleep(CAPTURE_GAP_MS);
       const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
       const after = await askPage<PhotoFrame | null>(tabId, { type: 'PHOTO_FRAME', index: i, scroll: false });
-      if (!after?.rects || !rectsMatch([before.rect], [after.rect]) || !rectsMatch(before.rects, after.rects)) continue;
+      if (!after || !rectsMatch([before.rect], [after.rect])) continue;
       photos.push(await cropPhoto(raw, before));
     }
   } catch (err) {
@@ -179,18 +175,13 @@ async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<
 async function cropPhoto(rawDataUrl: string, f: PhotoFrame): Promise<string> {
   const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());
   const scale = bitmap.width / f.viewport.innerWidth;
-  const screen = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const sctx = screen.getContext('2d')!;
-  sctx.drawImage(bitmap, 0, 0);
-  sctx.fillStyle = '#111111';
-  for (const r of f.rects ?? []) sctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
   const sx = Math.max(0, Math.round(f.rect.x * scale));
   const sy = Math.max(0, Math.round(f.rect.y * scale));
   const sw = Math.min(Math.round(f.rect.w * scale), bitmap.width - sx);
   const sh = Math.min(Math.round(f.rect.h * scale), bitmap.height - sy);
   const k = Math.min(1, 1600 / sw);
   const out = new OffscreenCanvas(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
-  out.getContext('2d')!.drawImage(screen, sx, sy, sw, sh, 0, 0, out.width, out.height);
+  out.getContext('2d')!.drawImage(bitmap, sx, sy, sw, sh, 0, 0, out.width, out.height);
   return blobToDataUrl(await out.convertToBlob({ type: 'image/jpeg', quality: 0.85 }));
 }
 
@@ -207,16 +198,11 @@ interface Sheet {
   painted: number;
 }
 
-/** Redacts one screen and draws the sheet's part of it at its scroll offset on the tall canvas. */
+/** Draws the sheet's part of one screen at its scroll offset on the tall canvas. */
 async function paintFrame(sheet: Sheet | null, rawDataUrl: string, f: FramePayload, maxTop: number): Promise<Sheet> {
   const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());
   const scale = bitmap.width / f.viewport.innerWidth;
 
-  const screen = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const sctx = screen.getContext('2d')!;
-  sctx.drawImage(bitmap, 0, 0);
-  sctx.fillStyle = '#111111';
-  for (const r of f.rects ?? []) sctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
 
   const sx = Math.max(0, Math.round(f.region.x * scale));
   const sy = Math.max(0, Math.round(f.region.y * scale));
@@ -229,7 +215,7 @@ async function paintFrame(sheet: Sheet | null, rawDataUrl: string, f: FramePaylo
     painted: 0,
   };
   const dy = Math.round(f.scrollTop * scale);
-  next.canvas.getContext('2d')!.drawImage(screen, sx, sy, sw, sh, 0, dy, sw, sh);
+  next.canvas.getContext('2d')!.drawImage(bitmap, sx, sy, sw, sh, 0, dy, sw, sh);
   next.painted = Math.max(next.painted, Math.min(dy + sh, next.canvas.height));
   return next;
 }

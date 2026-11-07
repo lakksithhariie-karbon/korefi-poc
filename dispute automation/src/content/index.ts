@@ -1,11 +1,10 @@
 // Content script. It answers the extension when the operator presses capture; it never runs on its own.
 // It never clicks, navigates, edits the page, or calls any platform endpoint. The one thing it does besides
 // reading is scroll the order sheet while a screenshot is taken, then the background worker puts the scroll back.
-import { parseOrder, redactText } from '../shared/extract.ts';
+import { parseOrder } from '../shared/extract.ts';
 import { parseUberOrder } from '../shared/extract-ubereats.ts';
 import { findOrderId, findStoreId } from '../shared/ids.ts';
 import { detectPlatform } from '../shared/platform.ts';
-import { scrubText } from '../shared/redact.ts';
 import type { CaptureContext, FramePayload, PagePayload, ParsedOrder, PhotoFrame, Platform, RuntimeMessage } from '../shared/types.ts';
 import {
   captureRoot,
@@ -13,8 +12,6 @@ import {
   findOrderRoot,
   findScroller,
   intersect,
-  maskedTexts,
-  redactionRects,
   scrollMetrics,
   setScrollTop,
   viewport,
@@ -23,11 +20,13 @@ import {
 const platform = (): Platform => detectPlatform(location.href, document);
 const parse = (text: string, on: Platform): ParsedOrder => (on === 'ubereats' ? parseUberOrder(text) : parseOrder(text));
 
-/** Names to hide: those the parser found, plus anything the platform itself marks as private. */
-function personalNames(root: HTMLElement, on: Platform): string[] {
-  const { names } = parse(root.innerText, on);
-  return [...new Set([...names, ...maskedTexts(root)])];
-}
+/** The page text as shown, one line per line, with blank lines and extra spaces dropped. Nothing is removed. */
+const pageText = (text: string): string =>
+  text
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
 
 function buildPayload(): PagePayload | null {
   const on = platform();
@@ -36,7 +35,7 @@ function buildPayload(): PagePayload | null {
   const text = root.innerText;
   const { snapshot } = parse(text, on);
   if (!snapshot.orderId) return null;
-  return { platform: on, url: location.href, snapshot, redactedText: scrubText(redactText(text, personalNames(root, on))) };
+  return { platform: on, url: location.href, snapshot, redactedText: pageText(text) };
 }
 
 /** Works on any order page, including ones whose layout the parser does not know. */
@@ -51,7 +50,7 @@ function buildContext(): CaptureContext {
     storeId: findStoreId(location.href, document.body.innerText.slice(0, 20000), on),
     title: document.title,
     url: location.href,
-    safeText: scrubText(redactText(text, personalNames(root, on))).slice(0, 9000),
+    safeText: pageText(text).slice(0, 9000),
     photoCount: customerPhotos(root).length,
     hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null,
   };
@@ -59,7 +58,7 @@ function buildContext(): CaptureContext {
 
 const settle = (ms = 350) => new Promise((r) => setTimeout(r, ms));
 
-/** Optionally scrolls the sheet, waits for it to settle, then measures where personal details sit on screen. */
+/** Optionally scrolls the sheet, waits for it to settle, then measures where it sits on screen. */
 async function frame(top: number | null): Promise<FramePayload | null> {
   const on = platform();
   const root = captureRoot(on);
@@ -68,10 +67,10 @@ async function frame(top: number | null): Promise<FramePayload | null> {
     setScrollTop(scroller, top);
     await settle();
   }
-  return { ...scrollMetrics(scroller), rects: redactionRects(root, personalNames(root, on), on), viewport: viewport() };
+  return { ...scrollMetrics(scroller), viewport: viewport() };
 }
 
-/** Scrolls one customer photo into view (when asked), waits for it to load, and measures it and the details around it. */
+/** Scrolls one customer photo into view (when asked), waits for it to load, and measures it. */
 async function photoFrame(index: number, scroll: boolean): Promise<PhotoFrame | null> {
   const on = platform();
   const root = captureRoot(on);
@@ -90,7 +89,7 @@ async function photoFrame(index: number, scroll: boolean): Promise<PhotoFrame | 
     intersect(scrollMetrics(scroller).region, { x: 0, y: 0, w: vp.innerWidth, h: vp.innerHeight }) ?? { x: 0, y: 0, w: 0, h: 0 },
   );
   if (!shown) return null;
-  return { rect: shown, rects: redactionRects(root, personalNames(root, on), on), viewport: vp };
+  return { rect: shown, viewport: vp };
 }
 
 // The background worker may inject this file again on demand, so only listen once per page.

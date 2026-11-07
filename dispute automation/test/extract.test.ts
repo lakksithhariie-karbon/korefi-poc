@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseOrder, redactText, parseMoney, parsePlacedAt } from '../src/shared/extract.ts';
+import { parseOrder, parseMoney, parsePlacedAt } from '../src/shared/extract.ts';
 import { assessRules } from '../src/shared/rules.ts';
 
 const won = readFileSync(new URL('../fixtures/order-3990CBFD.txt', import.meta.url), 'utf8');
@@ -20,7 +20,7 @@ test('parsePlacedAt reads the portal date format', () => {
 });
 
 test('parses the sample order page', () => {
-  const { snapshot: s, names } = parseOrder(won);
+  const { snapshot: s } = parseOrder(won);
   assert.equal(s.orderId, '3990CBFD');
   assert.equal(s.placedAt, '2026-09-20T12:48');
   assert.equal(s.status, 'Completed');
@@ -52,24 +52,6 @@ test('parses the sample order page', () => {
     ['18571334223', 'Error charges', -7.99],
     ['18677749380', 'Refunds', 7.99],
   ]);
-  assert.deepEqual(names.sort(), ['Dana K', 'Sam P']);
-});
-
-test('redaction removes names and customer profile lines', () => {
-  const { names } = parseOrder(won);
-  const out = redactText(won, names);
-  assert.ok(!out.includes('Sam P'));
-  assert.ok(!out.includes('Dana K'));
-  assert.ok(!/years on DoorDash/.test(out));
-  assert.ok(!/Top customer/.test(out));
-  assert.ok(out.includes('[PERSON] left a comment'));
-  assert.ok(out.includes('Missing entire item'));
-});
-
-test('snapshot never contains personal names', () => {
-  const { snapshot, names } = parseOrder(won);
-  const json = JSON.stringify(snapshot);
-  for (const n of names) assert.ok(!json.includes(n), `${n} leaked`);
 });
 
 test('rules: already approved charge is decided', () => {

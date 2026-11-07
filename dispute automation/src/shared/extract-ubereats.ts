@@ -10,9 +10,6 @@ const TIME24 = /^\d{1,2}:\d{2}$/;
 const QTY = /^\d{1,3}$/;
 const OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
 const FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
-// Profile lines under the customer's name: "New customer", "27 orders". They are hidden, but they are not names.
-const CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since|^\d+\s+orders?$/i;
-const COURIER_NOISE = /^\d{1,3}%$|orders? delivered|^Rate$|^(courier|delivery person|driver)$/i;
 const STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
 const MONTHS: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11,
@@ -52,16 +49,8 @@ export function parseUberOrder(rawText: string): ParsedOrder {
     for (let i = Math.max(from, 0); i < to; i++) if (pred(lines[i])) return i;
     return -1;
   };
-  const names: string[] = [];
-
   const iOrder = find((l) => ORDER.test(l));
   const orderId = iOrder >= 0 ? lines[iOrder].match(ORDER)![1] : '';
-
-  // The customer sits above the order heading: initials, name, and a tag such as "New customer".
-  for (const l of lines.slice(Math.max(0, iOrder - 4), Math.max(iOrder, 0))) {
-    if (CUSTOMER_TAG.test(l) || l.length > 40) continue;
-    names.push(l);
-  }
 
   const iDelivery = find((l) => l === 'Delivery details');
   const iDetails = find((l) => l === 'Order details');
@@ -75,15 +64,6 @@ export function parseUberOrder(rawText: string): ParsedOrder {
   const issueHeadline = banner.find((l) => FLAG.test(l) && l.length < 60) ?? null;
   const disputeOffered = head.includes('Dispute');
   const statusLine = lines.find((l) => STATUS.test(l));
-
-  // Courier: the first line under "Delivery details" that is not a rating, a count or a button.
-  if (iDelivery >= 0) {
-    for (const l of lines.slice(iDelivery + 1, iDetails >= 0 ? iDetails : iDelivery + 8)) {
-      if (COURIER_NOISE.test(l) || l.length < 2) continue;
-      names.push(l);
-      break;
-    }
-  }
 
   // Timed steps, then items until the money lines.
   const timeline: TimelineEvent[] = [];
@@ -190,6 +170,5 @@ export function parseUberOrder(rawText: string): ParsedOrder {
     timeline,
     shop,
   };
-  // Single letters are dropped: hiding every standalone "M" would wreck the text and still not identify anyone.
-  return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
+  return { snapshot };
 }

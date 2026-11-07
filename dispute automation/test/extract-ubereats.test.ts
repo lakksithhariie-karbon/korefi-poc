@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseUberOrder, parseMoneyAny, uberPlacedAt } from '../src/shared/extract-ubereats.ts';
-import { redactText } from '../src/shared/extract.ts';
 import { findOrderId, findStoreId } from '../src/shared/ids.ts';
 import { platformFromUrl } from '../src/shared/platform.ts';
 import { assessRules } from '../src/shared/rules.ts';
@@ -18,7 +17,7 @@ test('Uber Eats money and dates', () => {
 });
 
 test('reads the Uber Eats order drawer', () => {
-  const { snapshot: s, names } = parseUberOrder(page);
+  const { snapshot: s } = parseUberOrder(page);
   assert.equal(s.platform, 'ubereats');
   assert.equal(s.orderId, 'D2D46');
   assert.equal(s.placedAt, '2026-10-18T16:57');
@@ -42,16 +41,6 @@ test('reads the Uber Eats order drawer', () => {
   assert.equal(c.disputeStatus, 'available');
   assert.match(c.options[0], /Jasmine Silk Boba .*Customisation reported wrong/);
   assert.match(c.customerComment ?? '', /didn't have the jasmine silk boba/);
-  assert.deepEqual(names.sort(), ['M.E. G', 'MG', 'YOUWEI']);
-});
-
-test('Uber Eats text keeps the evidence and loses the people', () => {
-  const { names } = parseUberOrder(page);
-  const out = redactText(page, names);
-  assert.ok(!/M\.E\. G|YOUWEI|\bMG\b/.test(out), out.slice(0, 200));
-  assert.ok(!/New customer|orders delivered/.test(out));
-  assert.match(out, /Summer Night Black Milk Tea/);
-  assert.match(out, /barely even tastes like tea/);
 });
 
 test('Uber Eats charges get no made-up deadline', () => {
@@ -74,13 +63,10 @@ test('platform and IDs come from the address', () => {
 
 test('a pickup order with "27 orders" under the name', () => {
   const text = readFileSync(new URL('../fixtures/ubereats-5DE2A-pickup.txt', import.meta.url), 'utf8').replace('Jeff J', 'Jeff J');
-  const { snapshot: s, names } = parseUberOrder(text);
+  const { snapshot: s } = parseUberOrder(text);
   assert.equal(s.orderId, '5DE2A');
-  assert.deepEqual(names.sort(), ['JJ', 'Jeff J'], 'the order count is profile info, not a name; the non-breaking space is folded');
   assert.equal(s.errorChargeTotal, -2.85);
   assert.equal(s.errorCharges[0].item, 'Icy Peak Milk Tea');
   assert.equal(s.errorCharges[0].reason, '1 customisation missing');
   assert.equal(s.fulfillment, null);
-  const out = redactText(text, names);
-  assert.ok(!/Jeff|\bJJ\b|27 orders/.test(out), out.slice(0, 120));
 });

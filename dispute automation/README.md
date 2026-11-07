@@ -1,11 +1,11 @@
-# KoreFi Dispute Assistant v0.10.2
+# KoreFi Dispute Assistant v0.11.0
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
 draft, **files the dispute on the platform themselves**, and then confirms. Nothing is ever submitted by this software.
 
 ```
-DoorDash / Uber Eats tab ── attach (scroll, redact, stitch, customer photos) ──► side panel ── Send ──► agent service (Render) ──► Neon
+DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──► side panel ── Send ──► agent service (Render) ──► Neon
                                                                                    ▲                      │  chat, images, transcript saved
                                                                                    └─ answer + draft ◄────┘  agent resumes the same conversation
 ```
@@ -17,6 +17,20 @@ DoorDash / Uber Eats tab ── attach (scroll, redact, stitch, customer photos)
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+
+## What changed in v0.11.0: no masking
+
+- **Everything is captured as the page shows it**, on every platform: the screenshot has no black boxes, and the page text
+  sent to the agent keeps names, emails and phone numbers. The user's decision on 2026-11-07 (ZDR is enabled on the model side).
+- **Why.** v0.10 treated Uber Eats' `fs-mask` marker as "personal details". Uber also puts it on money and the item list, so on
+  live order C6005 almost the whole screenshot was blacked out. The mock pages had the marker only on names, so tests passed.
+- **Deleted, not switched off:** the black-out boxes, the text scrubber (`src/shared/redact.ts`), name collection in both order
+  readers, and the panel's key-based scrubbing of order facts. A screenshot is now dropped only if the page moves while capturing.
+- **Customer photos** are found even inside parts Uber marks private, and are taken whenever the page has them.
+- **Backend 0.5.1**: the prompt no longer tells the agent that details are blacked out (PROMPT_VERSION `2026-11-07.no-masking-1`).
+  The API field and database column are still named `redacted_page_text`; they now hold the page text as shown.
+- **Tests** now prove the opposite of before: no black boxes in any stored or uploaded image, names and the courier's face appear
+  in the screenshot, and an Uber page with `fs-mask` on the items and money (like C6005) is captured in full.
 
 ## What changed in v0.10.2: screenshots no longer depend on clicking the icon
 

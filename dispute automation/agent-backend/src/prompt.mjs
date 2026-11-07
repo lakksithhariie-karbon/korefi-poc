@@ -31,9 +31,9 @@ export function buildPrompt(request) {
     if (slices) {
       lines.push(
         slices === 1
-          ? 'One screenshot of the order page is attached' + (photos ? ' after the photos' : '') + '. Personal details are blacked out.'
+          ? 'One screenshot of the order page is attached' + (photos ? ' after the photos' : '') + '.'
           : slices + ' screenshot images of the order page are attached' + (photos ? ' after the photos' : '') +
-              '. They are consecutive top-to-bottom slices of one tall page with slight overlap. Personal details are blacked out.',
+              '. They are consecutive top-to-bottom slices of one tall page with slight overlap.',
       );
     }
   }
@@ -44,7 +44,7 @@ export function buildPrompt(request) {
   if (request.previousDraft) lines.push('The operator\'s current draft (untrusted, may be edited):\n' + request.previousDraft);
   lines.push(
     'Structured capture (untrusted): ' + JSON.stringify(request.facts).slice(0, 9000),
-    'Redacted page text (untrusted): ' + (request.redactedText || '').slice(0, 9000),
+    'Page text (untrusted): ' + (request.redactedText || '').slice(0, 9000),
     'Do not interpret an adjustment as a won dispute without a verified decision.',
     'Return the strict JSON described in your instructions.',
   );
@@ -62,7 +62,7 @@ export function buildFollowUpPrompt({ question, previousDraft, additionalText, i
     lines.push(
       imageCount === 1
         ? 'The case evidence image is attached again below. Look at it again if the question needs it.'
-        : imageCount + ' case evidence images are attached again below, in the order they were added: customer photos and slices of the order page, as described when each was added. Personal details are blacked out. Look at them again if the question needs it, including any photo of the food or packaging.',
+        : imageCount + ' case evidence images are attached again below, in the order they were added: customer photos and slices of the order page, as described when each was added. Look at them again if the question needs it, including any photo of the food or packaging.',
     );
   }
   if (additionalText) lines.push('Newly captured page text (untrusted): ' + additionalText.slice(0, 9000));

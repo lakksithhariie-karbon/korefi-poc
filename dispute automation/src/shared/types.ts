@@ -68,8 +68,6 @@ export interface OrderSnapshot {
 
 export interface ParsedOrder {
   snapshot: OrderSnapshot;
-  /** Personal names found on the page. Used only to redact; never leave the content script. */
-  names: string[];
 }
 
 export interface Rect {
@@ -91,27 +89,26 @@ export interface FramePayload {
   clientHeight: number;
   /** The visible area of the sheet within the viewport (CSS px). */
   region: Rect;
-  /** Regions (viewport CSS px) covering personal details at this scroll position. Null when they could not be located. */
-  rects: Rect[] | null;
   viewport: Viewport;
 }
 
-/** What the page reader found on an order sheet the parser understands. Contains no customer or Dasher names. */
+/** What the page reader found on an order sheet the parser understands. */
 export interface PagePayload {
   platform: Platform;
   url: string;
   snapshot: OrderSnapshot;
+  /** The page text as shown (the name is kept from when it was redacted). */
   redactedText: string;
 }
 
-/** What the page reader can say about any DoorDash page, even one the parser does not understand. */
+/** What the page reader can say about any order page, even one the parser does not understand. */
 export interface CaptureContext {
   platform: Platform;
   orderId: string | null;
   storeId: string | null;
   title: string;
   url: string;
-  /** Page text with personal details removed. */
+  /** The page text as shown. */
   safeText: string;
   /** How many customer-uploaded photos are on the order right now. */
   photoCount: number;
@@ -123,8 +120,6 @@ export interface CaptureContext {
 export interface PhotoFrame {
   /** The photo's visible area (viewport CSS px). */
   rect: Rect;
-  /** Personal details to black out at this scroll position. Null when they could not be located. */
-  rects: Rect[] | null;
   viewport: Viewport;
 }
 
@@ -150,8 +145,9 @@ export interface CaseRecord {
   trigger: 'manual';
   url: string;
   snapshot: OrderSnapshot;
+  /** The page text as shown (the name is kept from when it was redacted). */
   redactedText: string;
-  /** Redacted JPEG data URL. Absent when personal details could not be hidden, in which case no screenshot is taken. */
+  /** The order page screenshot as shown, as a JPEG data URL. Null when it could not be taken. */
   image: string | null;
   imageNote: string | null;
   /** Photos the customer uploaded with their complaint, as JPEG data URLs at full size. */

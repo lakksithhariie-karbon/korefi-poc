@@ -8,8 +8,6 @@
   var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
   var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
   var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$|^\d+ orders?$/i;
-  var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
   var MONTHS = {
     january: 0,
     february: 1,
@@ -80,7 +78,7 @@
     }
     return { qty: e.qty, name, options, price };
   }
-  function parseErrorEntry(e, names) {
+  function parseErrorEntry(e) {
     const out = {
       item: "",
       options: [],
@@ -95,7 +93,6 @@
       if (isMoneyLine(l)) {
         if (out.amount === null) out.amount = parseMoney(l);
       } else if (commenter) {
-        names.push(commenter[1]);
         expectComment = true;
       } else if (expectComment) {
         out.customerComment = l.replace(/^["“”']+|["“”']+$/g, "");
@@ -118,7 +115,6 @@
       for (let i = Math.max(from, 0); i < to; i++) if (pred(lines[i])) return i;
       return -1;
     };
-    const names = [];
     const iOrder = find((l) => /^Order:\s*\S+/.test(l));
     const orderId = iOrder >= 0 ? lines[iOrder].replace(/^Order:\s*/, "").trim() : "";
     const iPlaced = find((l) => /^Order placed:/i.test(l));
@@ -138,22 +134,6 @@
     const iCustomer = find((l) => l === "Customer", iDelivery, dEnd);
     const iDasher = find((l) => l === "Dasher", iDelivery, dEnd);
     const iPicked = find((l) => l === "Picked up", iDelivery, dEnd);
-    const nameAfter = (from, to) => {
-      for (let i = from + 1; i < to; i++) {
-        const l = lines[i];
-        if (l.length <= 1 || UI_NOISE.test(l) || PROFILE_NOISE.test(l)) continue;
-        return l;
-      }
-      return null;
-    };
-    if (iCustomer >= 0) {
-      const n = nameAfter(iCustomer, iDasher > iCustomer ? iDasher : iPicked > iCustomer ? iPicked : dEnd);
-      if (n) names.push(n);
-    }
-    if (iDasher >= 0) {
-      const n = nameAfter(iDasher, iPicked > iDasher ? iPicked : dEnd);
-      if (n) names.push(n);
-    }
     const pairs = [];
     for (let i = Math.max(iPicked, iDelivery, 0); i < dEnd; i++) {
       if (!TIME.test(lines[i])) continue;
@@ -174,7 +154,7 @@
     const iCommission = find((l) => /^Commission/i.test(l), iDetails, odEnd);
     const commissionPct = iCommission >= 0 ? parseFloat(lines[iCommission].match(/\(([\d.]+)%\)/)?.[1] ?? "NaN") : NaN;
     const errBlock = iErr >= 0 ? lines.slice(iErr + 1, iErrSub >= 0 ? iErrSub : iAssoc >= 0 ? iAssoc : lines.length) : [];
-    const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e, names));
+    const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e));
     const tailFrom = iErrSub >= 0 ? iErrSub : iErr >= 0 ? iErr : 0;
     const transactions = [];
     if (iAssoc >= 0) {
@@ -209,17 +189,7 @@
       estimatedPayout: rowValue("Estimated payout", tailFrom, lines.length),
       transactions
     };
-    return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
-  }
-  function escapeRegExp(s) {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
-  function redactText(text, names) {
-    let out = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => l.length > 0).filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l)).join("\n");
-    for (const n of [...names].sort((a, b) => b.length - a.length)) {
-      out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(n)}(?![A-Za-z0-9])`, "g"), "[PERSON]");
-    }
-    return out;
+    return { snapshot };
   }
 
   // src/shared/extract-ubereats.ts
@@ -230,8 +200,6 @@
   var QTY2 = /^\d{1,3}$/;
   var OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
   var FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
-  var CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since|^\d+\s+orders?$/i;
-  var COURIER_NOISE = /^\d{1,3}%$|orders? delivered|^Rate$|^(courier|delivery person|driver)$/i;
   var STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
   var MONTHS2 = {
     jan: 0,
@@ -270,13 +238,8 @@
       for (let i2 = Math.max(from, 0); i2 < to; i2++) if (pred(lines[i2])) return i2;
       return -1;
     };
-    const names = [];
     const iOrder = find((l) => ORDER.test(l));
     const orderId = iOrder >= 0 ? lines[iOrder].match(ORDER)[1] : "";
-    for (const l of lines.slice(Math.max(0, iOrder - 4), Math.max(iOrder, 0))) {
-      if (CUSTOMER_TAG.test(l) || l.length > 40) continue;
-      names.push(l);
-    }
     const iDelivery = find((l) => l === "Delivery details");
     const iDetails = find((l) => l === "Order details");
     const headEnd = iDelivery >= 0 ? iDelivery : iDetails >= 0 ? iDetails : lines.length;
@@ -289,13 +252,6 @@
     const issueHeadline = banner.find((l) => FLAG.test(l) && l.length < 60) ?? null;
     const disputeOffered = head.includes("Dispute");
     const statusLine = lines.find((l) => STATUS.test(l));
-    if (iDelivery >= 0) {
-      for (const l of lines.slice(iDelivery + 1, iDetails >= 0 ? iDetails : iDelivery + 8)) {
-        if (COURIER_NOISE.test(l) || l.length < 2) continue;
-        names.push(l);
-        break;
-      }
-    }
     const timeline = [];
     let i = iDetails >= 0 ? iDetails + 1 : lines.length;
     while (i + 1 < lines.length && TIME24.test(lines[i]) && !TIME24.test(lines[i + 1])) {
@@ -395,7 +351,7 @@
       timeline,
       shop
     };
-    return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
+    return { snapshot };
   }
 
   // src/shared/ids.ts
@@ -467,50 +423,6 @@
     return "doordash";
   }
 
-  // src/shared/redact.ts
-  var PERSON_LABELS = /* @__PURE__ */ new Set(["customer", "dasher", "driver"]);
-  var STOP_LABELS = /* @__PURE__ */ new Set([
-    "customer",
-    "dasher",
-    "driver",
-    "picked up",
-    "dropped off",
-    "pick up location",
-    "pickup location",
-    "channel",
-    "fulfillment",
-    "order details",
-    "error charges",
-    "associated transactions"
-  ]);
-  var COMMENTER = /^(.+) left a comment$/i;
-  var EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-  var PHONE = /(?:\+?1[-. ]?)?(?:\(\d{3}\)|\b\d{3})[-. ]\d{3}[-. ]\d{4}\b/g;
-  var MAX_BLOCK_LINES = 12;
-  function scrubText(text) {
-    const lines = text.split(/\r?\n/).map((l) => l.trim());
-    const out = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line) continue;
-      if (COMMENTER.test(line)) {
-        out.push("[PERSON] left a comment");
-        continue;
-      }
-      out.push(line);
-      if (!PERSON_LABELS.has(line.toLowerCase())) continue;
-      let skipped = 0;
-      while (i + 1 < lines.length && skipped < MAX_BLOCK_LINES) {
-        const next = lines[i + 1].toLowerCase();
-        if (next && STOP_LABELS.has(next)) break;
-        i++;
-        if (lines[i]) skipped++;
-      }
-      if (skipped) out.push("[redacted]");
-    }
-    return out.join("\n").replace(EMAIL, "[email]").replace(PHONE, "[phone]");
-  }
-
   // src/content/dom.ts
   var ORDER_HEADINGS = {
     doordash: /(^|\n)Order:\s*[A-Z0-9]{4,}/,
@@ -518,10 +430,6 @@
     ubereats: /(^|\n)Order\s+[A-Z0-9]{4,16}\s*(\n|$)/,
     grubhub: /(^|\n)Order\s*#?\s*[A-Z0-9-]{4,}/
   };
-  var PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$|^\s*\d+\s+orders?\s*$/i;
-  var fold = (s) => s.replace(/\s+/g, " ").trim();
-  var FALLBACK_BLOCK_HEIGHT = 170;
-  var MASKED = ".fs-mask, [data-fs-mask], [data-private]";
   var PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-baseweb="drawer"], [role="dialog"], [aria-modal="true"]';
   var PHOTO_CONTEXT = /photo|picture|image|feedback|comment|evidence/i;
   var MAX_PHOTOS = 3;
@@ -560,34 +468,6 @@ ${text}
   function viewport() {
     return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
   }
-  function toRect(r, pad = 4) {
-    return { x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2 };
-  }
-  function visible(r, vp) {
-    return r.w > 0 && r.h > 0 && r.x < vp.innerWidth && r.y < vp.innerHeight && r.x + r.w > 0 && r.y + r.h > 0;
-  }
-  function textRect(node) {
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    return range.getBoundingClientRect();
-  }
-  function rowRect(node, root) {
-    const start = node instanceof HTMLElement ? node : node.parentElement;
-    if (!start) return null;
-    let target = start;
-    for (let i = 0; i < 2; i++) {
-      const parent = target.parentElement;
-      if (!parent || parent === root) break;
-      const pr = parent.getBoundingClientRect();
-      if (pr.height > 80 || pr.width > root.getBoundingClientRect().width * 0.98) break;
-      target = parent;
-    }
-    return target.getBoundingClientRect();
-  }
-  var hits = (re, text) => {
-    re.lastIndex = 0;
-    return re.test(text);
-  };
   function isRound(el, rect) {
     for (let e = el, i = 0; e && i < 3; e = e.parentElement, i++) {
       const radius = getComputedStyle(e).borderTopLeftRadius;
@@ -608,7 +488,6 @@ ${text}
     return out;
   }
   function isCustomerPhoto(p) {
-    if (p.el.closest(MASKED)) return false;
     if (p.rect.width < 48 || p.rect.height < 48 || isRound(p.el, p.rect)) return false;
     if (p.rect.width >= 120 && p.rect.height >= 120) return true;
     for (let e = p.el.parentElement, i = 0; e && i < 4; e = e.parentElement, i++) {
@@ -619,83 +498,6 @@ ${text}
   }
   function customerPhotos(root) {
     return pictures(root).filter(isCustomerPhoto).slice(0, MAX_PHOTOS).map((p) => p.el);
-  }
-  function personPictures(root) {
-    return pictures(root).filter((p) => !isCustomerPhoto(p) && (isRound(p.el, p.rect) || p.rect.width <= 96 && p.rect.height <= 96)).map((p) => p.rect);
-  }
-  function redactionRects(root, names, platform2 = "doordash") {
-    const vp = viewport();
-    const rects = [];
-    const found = /* @__PURE__ */ new Set();
-    const sheet = root.getBoundingClientRect();
-    const texts = [];
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = fold(node.textContent ?? "");
-      if (text) texts.push({ node, text });
-    }
-    const wanted = [...new Set(names.map(fold).filter(Boolean))];
-    let traces = 0;
-    for (const { node, text } of texts) {
-      const name = wanted.find((n) => text.includes(n));
-      if (name) found.add(name);
-      if (!name && !PROFILE_TEXT.test(text) && !COMMENTER.test(text) && !hits(EMAIL, text) && !hits(PHONE, text)) continue;
-      const row = rowRect(node, root);
-      if (row) {
-        rects.push(toRect(row));
-        traces++;
-      }
-    }
-    for (let i = 0; i < texts.length; i++) {
-      if (!PERSON_LABELS.has(texts[i].text.toLowerCase())) continue;
-      const label = textRect(texts[i].node);
-      let end = label.bottom + FALLBACK_BLOCK_HEIGHT;
-      for (let j = i + 1; j < texts.length; j++) {
-        if (STOP_LABELS.has(texts[j].text.toLowerCase())) {
-          end = Math.min(end, textRect(texts[j].node).top);
-          break;
-        }
-      }
-      if (end > label.bottom) {
-        rects.push({ x: sheet.left - 2, y: label.bottom + 1, w: sheet.width + 4, h: end - label.bottom - 2 });
-        traces++;
-      }
-    }
-    let masked = 0;
-    for (const el of root.querySelectorAll(MASKED)) {
-      const r = el.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) continue;
-      rects.push(toRect(rowRect(el, root) ?? r));
-      masked++;
-    }
-    for (const r of personPictures(root)) rects.push(toRect(r, 2));
-    for (const n of wanted) {
-      if (found.has(n)) continue;
-      const el = smallestHolding(root, n);
-      if (!el) continue;
-      rects.push(toRect(rowRect(el, root) ?? el.getBoundingClientRect()));
-      found.add(n);
-      traces++;
-    }
-    if (wanted.some((n) => !found.has(n))) return null;
-    if (platform2 !== "doordash" && wanted.length === 0 && masked === 0) return null;
-    if (traces + masked === 0) return null;
-    return rects.filter((r) => visible(r, vp));
-  }
-  function smallestHolding(root, name) {
-    let best = null;
-    let bestLength = Infinity;
-    for (const el of root.querySelectorAll("*")) {
-      const text = fold(el.textContent ?? "");
-      if (text.length < bestLength && text.length <= name.length + 40 && text.includes(name)) {
-        best = el;
-        bestLength = text.length;
-      }
-    }
-    return best;
-  }
-  function maskedTexts(root) {
-    return [...root.querySelectorAll(MASKED)].flatMap((el) => el.innerText.split("\n")).map(fold).filter((t) => t.length >= 2 && t.length <= 60);
   }
   function scrolls(el, minHeight) {
     return /(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY) && el.clientHeight >= minHeight && el.scrollHeight > el.clientHeight + 4;
@@ -739,10 +541,7 @@ ${text}
   // src/content/index.ts
   var platform = () => detectPlatform(location.href, document);
   var parse = (text, on) => on === "ubereats" ? parseUberOrder(text) : parseOrder(text);
-  function personalNames(root, on) {
-    const { names } = parse(root.innerText, on);
-    return [.../* @__PURE__ */ new Set([...names, ...maskedTexts(root)])];
-  }
+  var pageText = (text) => text.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
   function buildPayload() {
     const on = platform();
     const root = findOrderRoot(on);
@@ -750,7 +549,7 @@ ${text}
     const text = root.innerText;
     const { snapshot } = parse(text, on);
     if (!snapshot.orderId) return null;
-    return { platform: on, url: location.href, snapshot, redactedText: scrubText(redactText(text, personalNames(root, on))) };
+    return { platform: on, url: location.href, snapshot, redactedText: pageText(text) };
   }
   function buildContext() {
     const on = platform();
@@ -763,7 +562,7 @@ ${text}
       storeId: findStoreId(location.href, document.body.innerText.slice(0, 2e4), on),
       title: document.title,
       url: location.href,
-      safeText: scrubText(redactText(text, personalNames(root, on))).slice(0, 9e3),
+      safeText: pageText(text).slice(0, 9e3),
       photoCount: customerPhotos(root).length,
       hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null
     };
@@ -777,7 +576,7 @@ ${text}
       setScrollTop(scroller, top);
       await settle();
     }
-    return { ...scrollMetrics(scroller), rects: redactionRects(root, personalNames(root, on), on), viewport: viewport() };
+    return { ...scrollMetrics(scroller), viewport: viewport() };
   }
   async function photoFrame(index, scroll) {
     const on = platform();
@@ -797,7 +596,7 @@ ${text}
       intersect(scrollMetrics(scroller).region, { x: 0, y: 0, w: vp.innerWidth, h: vp.innerHeight }) ?? { x: 0, y: 0, w: 0, h: 0 }
     );
     if (!shown) return null;
-    return { rect: shown, rects: redactionRects(root, personalNames(root, on), on), viewport: vp };
+    return { rect: shown, viewport: vp };
   }
   var flag = window;
   if (!flag.__korefiReader) {

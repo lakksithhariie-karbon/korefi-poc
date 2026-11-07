@@ -271,13 +271,6 @@
       throw Error('Use a secure HTTPS address (or localhost for testing).');
     return `${u.origin}/*`;
   }
-  function scrub(value,key=''){
-    // Customer and Dasher details never belong in a request. Item names and order facts are the evidence, so they stay.
-    if(/^(customer|dasher|driver)(_?name)?$/i.test(key)||/(phone|e-?mail|address|token|secret|password)/i.test(key))return '[redacted]';
-    if(Array.isArray(value))return value.map(v=>scrub(v));
-    if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,scrub(v,k)]));
-    return value;
-  }
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   // A tall screenshot is sent as consecutive slices so the model reads it at a legible size instead of a shrunken strip.
   async function tileScreenshot(dataUri){
@@ -354,7 +347,7 @@
     throw Error('This is taking longer than expected. Send your message again.');
   }
   function caseFacts(c){
-    const facts=scrub(c.snapshot||{});
+    const facts=c.snapshot||{};
     const reasons=(c.snapshot?.errorCharges||[]).map(x=>x.reason).filter(Boolean);
     const amount=Number(c.facts?.errorTotal??c.snapshot?.errorChargeTotal);
     const photos=photosOf(c).length;
@@ -365,11 +358,11 @@
       issue_category:reasons[0]||null,issue_description:reasons.join('; ').slice(0,1800)||null,
       dispute_amount:Number.isFinite(amount)?Math.abs(amount):null,
       // The server is told which images are customer photos: they always come first.
-      structured_facts:{...facts,extension_rule_estimate:scrub(c.facts||{}),attached_images:{customer_photos:photos}},
+      structured_facts:{...facts,extension_rule_estimate:c.facts||{},attached_images:{customer_photos:photos}},
       redacted_page_text:String(c.redactedText||'').slice(0,11000)||null,
       capture_status:c.image?(c.imageNote?.includes('first ')?'partial':'complete'):'data_only'};
   }
-  // Opens the chat on the server the first time something is sent. The redacted screenshot slices are uploaded once, here.
+  // Opens the chat on the server the first time something is sent. The screenshot slices are uploaded once, here.
   async function createConversation(shots){
     const created=await (await piFetch('/v1/conversations',{method:'POST',key:crypto.randomUUID(),body:JSON.stringify({...caseFacts(current),screenshots:shots}),timeout:90000})).json();
     if(!created?.conversation_id)throw Error('The agent could not start a chat. Try again.');

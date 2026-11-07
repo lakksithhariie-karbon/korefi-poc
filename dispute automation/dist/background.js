@@ -8,8 +8,6 @@
   var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
   var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
   var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$|^\d+ orders?$/i;
-  var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
   var MONTHS = {
     january: 0,
     february: 1,
@@ -80,7 +78,7 @@
     }
     return { qty: e.qty, name, options, price };
   }
-  function parseErrorEntry(e, names) {
+  function parseErrorEntry(e) {
     const out = {
       item: "",
       options: [],
@@ -95,7 +93,6 @@
       if (isMoneyLine(l)) {
         if (out.amount === null) out.amount = parseMoney(l);
       } else if (commenter) {
-        names.push(commenter[1]);
         expectComment = true;
       } else if (expectComment) {
         out.customerComment = l.replace(/^["“”']+|["“”']+$/g, "");
@@ -118,7 +115,6 @@
       for (let i = Math.max(from, 0); i < to; i++) if (pred(lines[i])) return i;
       return -1;
     };
-    const names = [];
     const iOrder = find((l) => /^Order:\s*\S+/.test(l));
     const orderId = iOrder >= 0 ? lines[iOrder].replace(/^Order:\s*/, "").trim() : "";
     const iPlaced = find((l) => /^Order placed:/i.test(l));
@@ -138,22 +134,6 @@
     const iCustomer = find((l) => l === "Customer", iDelivery, dEnd);
     const iDasher = find((l) => l === "Dasher", iDelivery, dEnd);
     const iPicked = find((l) => l === "Picked up", iDelivery, dEnd);
-    const nameAfter = (from, to) => {
-      for (let i = from + 1; i < to; i++) {
-        const l = lines[i];
-        if (l.length <= 1 || UI_NOISE.test(l) || PROFILE_NOISE.test(l)) continue;
-        return l;
-      }
-      return null;
-    };
-    if (iCustomer >= 0) {
-      const n = nameAfter(iCustomer, iDasher > iCustomer ? iDasher : iPicked > iCustomer ? iPicked : dEnd);
-      if (n) names.push(n);
-    }
-    if (iDasher >= 0) {
-      const n = nameAfter(iDasher, iPicked > iDasher ? iPicked : dEnd);
-      if (n) names.push(n);
-    }
     const pairs = [];
     for (let i = Math.max(iPicked, iDelivery, 0); i < dEnd; i++) {
       if (!TIME.test(lines[i])) continue;
@@ -174,7 +154,7 @@
     const iCommission = find((l) => /^Commission/i.test(l), iDetails, odEnd);
     const commissionPct = iCommission >= 0 ? parseFloat(lines[iCommission].match(/\(([\d.]+)%\)/)?.[1] ?? "NaN") : NaN;
     const errBlock = iErr >= 0 ? lines.slice(iErr + 1, iErrSub >= 0 ? iErrSub : iAssoc >= 0 ? iAssoc : lines.length) : [];
-    const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e, names));
+    const errorCharges = splitEntries(errBlock).map((e) => parseErrorEntry(e));
     const tailFrom = iErrSub >= 0 ? iErrSub : iErr >= 0 ? iErr : 0;
     const transactions = [];
     if (iAssoc >= 0) {
@@ -209,7 +189,7 @@
       estimatedPayout: rowValue("Estimated payout", tailFrom, lines.length),
       transactions
     };
-    return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
+    return { snapshot };
   }
 
   // src/shared/rules.ts
@@ -315,8 +295,8 @@
     const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
     const snapshot = payload?.snapshot ?? { ...parseOrder(`Order: ${orderId}`).snapshot, platform };
     const redactedText = payload?.redactedText ?? context?.safeText ?? "";
-    const { image, note } = await takeRedactedScreenshot(tab);
-    const photos = image && context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
+    const { image, note } = await takeScreenshot(tab);
+    const photos = context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
     const record = {
       id: `${orderId}-${Date.now().toString(36)}`,
       platform,
@@ -342,9 +322,8 @@
   var CAPTURE_GAP_MS = 600;
   var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   var withheld = (why) => ({ image: null, note: `No screenshot: ${why}` });
-  var CANNOT_HIDE = "the customer\u2019s details could not be found to hide, so only the page text was kept.";
   var NEEDS_ACCESS = "Chrome has not let KoreFi see this tab yet. Tap + and choose Allow when Chrome asks.";
-  async function takeRedactedScreenshot(tab) {
+  async function takeScreenshot(tab) {
     if (!tab.active || tab.id === void 0 || tab.windowId === void 0) {
       return { image: null, note: "No screenshot: the order tab is not the active tab. Switch to it and capture again." };
     }
@@ -368,12 +347,12 @@
       let lastShot = 0;
       for (const top of tops) {
         const before = await ask(top);
-        if (!before?.rects) return withheld(CANNOT_HIDE);
+        if (!before) return withheld("the page could not be read.");
         await sleep(Math.max(0, CAPTURE_GAP_MS - (Date.now() - lastShot)));
         const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
         lastShot = Date.now();
         const after = await ask(null);
-        if (!after?.rects || Math.abs(after.scrollTop - before.scrollTop) > 1 || !rectsMatch(before.rects, after.rects)) {
+        if (!after || Math.abs(after.scrollTop - before.scrollTop) > 1 || !rectsMatch([before.region], [after.region])) {
           return withheld("the page moved while capturing. Leave it alone for a few seconds and capture again.");
         }
         sheet = await paintFrame(sheet, raw, before, maxTop);
@@ -399,11 +378,11 @@
       start = await askPage(tabId, { type: "SCROLL_FRAME", top: null });
       for (let i = 0; i < Math.min(count, 3); i++) {
         const before = await askPage(tabId, { type: "PHOTO_FRAME", index: i, scroll: true });
-        if (!before?.rects) continue;
+        if (!before) continue;
         await sleep(CAPTURE_GAP_MS);
         const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
         const after = await askPage(tabId, { type: "PHOTO_FRAME", index: i, scroll: false });
-        if (!after?.rects || !rectsMatch([before.rect], [after.rect]) || !rectsMatch(before.rects, after.rects)) continue;
+        if (!after || !rectsMatch([before.rect], [after.rect])) continue;
         photos.push(await cropPhoto(raw, before));
       }
     } catch (err) {
@@ -417,18 +396,13 @@
   async function cropPhoto(rawDataUrl, f) {
     const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());
     const scale = bitmap.width / f.viewport.innerWidth;
-    const screen = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const sctx = screen.getContext("2d");
-    sctx.drawImage(bitmap, 0, 0);
-    sctx.fillStyle = "#111111";
-    for (const r of f.rects ?? []) sctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
     const sx = Math.max(0, Math.round(f.rect.x * scale));
     const sy = Math.max(0, Math.round(f.rect.y * scale));
     const sw = Math.min(Math.round(f.rect.w * scale), bitmap.width - sx);
     const sh = Math.min(Math.round(f.rect.h * scale), bitmap.height - sy);
     const k = Math.min(1, 1600 / sw);
     const out = new OffscreenCanvas(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
-    out.getContext("2d").drawImage(screen, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    out.getContext("2d").drawImage(bitmap, sx, sy, sw, sh, 0, 0, out.width, out.height);
     return blobToDataUrl(await out.convertToBlob({ type: "image/jpeg", quality: 0.85 }));
   }
   function rectsMatch(a, b) {
@@ -438,11 +412,6 @@
   async function paintFrame(sheet, rawDataUrl, f, maxTop) {
     const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());
     const scale = bitmap.width / f.viewport.innerWidth;
-    const screen = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const sctx = screen.getContext("2d");
-    sctx.drawImage(bitmap, 0, 0);
-    sctx.fillStyle = "#111111";
-    for (const r of f.rects ?? []) sctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
     const sx = Math.max(0, Math.round(f.region.x * scale));
     const sy = Math.max(0, Math.round(f.region.y * scale));
     const sw = Math.min(Math.round(f.region.w * scale), bitmap.width - sx);
@@ -453,7 +422,7 @@
       painted: 0
     };
     const dy = Math.round(f.scrollTop * scale);
-    next.canvas.getContext("2d").drawImage(screen, sx, sy, sw, sh, 0, dy, sw, sh);
+    next.canvas.getContext("2d").drawImage(bitmap, sx, sy, sw, sh, 0, dy, sw, sh);
     next.painted = Math.max(next.painted, Math.min(dy + sh, next.canvas.height));
     return next;
   }
