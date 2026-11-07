@@ -108,3 +108,43 @@ test('an Uber Eats turn offers only KoreFi case history, never the DoorDash look
   await investigate({ store: createMemoryStore(), tenant: 't', request: request(), runId: 1, env: {}, transcript: [], images: [], streamFn: dd.streamFn });
   assert.match(JSON.stringify(dd.contexts[0]), /get_order_financials/);
 });
+
+test('every step of a run goes to the log: start, model replies with tokens, tools with rows, finish, and the full answer', async () => {
+  const store = createMemoryStore();
+  const { streamFn } = fakeModel();
+  const lines = [];
+  await investigate({ store, tenant: 't', request: request({ storeId: '28006527', platform: 'doordash' }), runId: 'run-7', env: {}, streamFn, log: (l) => lines.push(JSON.parse(l)) });
+  const events = lines.map((l) => l.event);
+  assert.equal(events[0], 'agent_run_started');
+  assert.deepEqual(events.slice(-2), ['agent_run_finished', 'agent_answer']);
+  for (const e of ['agent_model_replied', 'agent_tool_called', 'agent_tool_finished']) assert.ok(events.includes(e), e);
+  assert.ok(lines.every((l) => l.run === 'run-7' && typeof l.ms === 'number'));
+  const started = lines[0];
+  assert.equal(started.order, 'ABC12345');
+  assert.equal(started.question, 'Can we dispute?');
+  assert.equal(lines.find((l) => l.event === 'agent_tool_finished').rows, 0);
+  const finished = lines.find((l) => l.event === 'agent_run_finished');
+  assert.equal(finished.tokens_in, 2);
+  assert.equal(finished.tokens_out, 2);
+  assert.equal(finished.model_calls, 2);
+  const answer = lines.at(-1);
+  assert.equal(answer.reply, 'answer 2');
+  assert.equal(answer.draft, 'draft');
+});
+
+test('a run that fails is logged before the error goes back', async () => {
+  const store = createMemoryStore();
+  const message = { ...base, role: 'assistant', content: [{ type: 'text', text: '' }], stopReason: 'stop' };
+  const streamFn = () => {
+    const s = createAssistantMessageEventStream();
+    queueMicrotask(() => {
+      s.push({ type: 'start', partial: message });
+      s.push({ type: 'done', reason: 'stop', message });
+      s.end(message);
+    });
+    return s;
+  };
+  const lines = [];
+  await assert.rejects(investigate({ store, tenant: 't', request: request(), runId: 'run-8', env: {}, streamFn, log: (l) => lines.push(JSON.parse(l)) }));
+  assert.equal(lines.at(-1).event, 'agent_run_failed');
+});

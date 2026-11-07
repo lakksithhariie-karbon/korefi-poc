@@ -227,6 +227,28 @@ export function createPgStore(env = process.env) {
       await db.query('UPDATE dispute_automation.agent_tool_calls SET status=$2,finished_at=now(),result_summary=$3::jsonb WHERE id=$1', [id, status, JSON.stringify(summary)]);
     },
 
+    /**
+     * Saves the platform's decision, read from the order page, on the latest dispute filed through KoreFi for this case.
+     * Returns null when nothing was filed here, and changed=false when the same decision is already saved.
+     */
+    async recordOutcome(caseId, decision) {
+      const { db } = pools();
+      const { rows } = await db.query(
+        `WITH s AS (SELECT id FROM dispute_automation.submissions WHERE case_id=$1::uuid ORDER BY submitted_at DESC LIMIT 1),
+              prev AS (SELECT o.decision_status FROM dispute_automation.outcomes o JOIN s ON o.submission_id=s.id)
+         INSERT INTO dispute_automation.outcomes(submission_id,decision_status,decided_at,notes,updated_at)
+           SELECT s.id,$2::text,CASE WHEN $2::text IN ('won','denied') THEN now() END,'Read from the order page',now() FROM s
+         ON CONFLICT (submission_id) DO UPDATE SET decision_status=EXCLUDED.decision_status,
+           decided_at=COALESCE(dispute_automation.outcomes.decided_at,EXCLUDED.decided_at),notes=EXCLUDED.notes,updated_at=now()
+           WHERE dispute_automation.outcomes.decision_status IS DISTINCT FROM EXCLUDED.decision_status
+         RETURNING submission_id,(SELECT decision_status FROM prev) AS previous`,
+        [caseId, decision],
+      );
+      if (rows.length) return { submission_id: String(rows[0].submission_id), previous: rows[0].previous ?? null, changed: true };
+      const filed = await db.query('SELECT 1 FROM dispute_automation.submissions WHERE case_id=$1 LIMIT 1', [caseId]);
+      return filed.rows.length ? { changed: false } : null;
+    },
+
     /** Records the operator's confirmation once, atomically. A repeat for the same key returns the first record. */
     async recordSubmission(tenant, caseId, key, actor, disputeText, submittedAt) {
       return tx(async (c) => {
@@ -462,19 +484,21 @@ export function createPgStore(env = process.env) {
       async similarCases(tenant, storeId, category, orderId, platform = 'doordash') {
         const { db } = pools();
         const { rows } = await db.query(
+          // Same store, any issue: with little history every past case helps. Filed disputes and the same issue come first.
           `SELECT c.platform_order_id,c.issue_category,c.error_amount,c.created_at,
-            o.decision_status,o.awarded_amount,COALESCE(SUM(r.credit_amount),0) AS received_amount,
+            s.submitted_at AS filed_at,s.dispute_text AS filed_dispute_text,
+            COALESCE(o.decision_status, CASE WHEN s.id IS NULL THEN 'not_filed' ELSE 'unknown' END) AS result,
+            o.awarded_amount,COALESCE(SUM(r.credit_amount),0) AS received_amount,
             i.recommendation,i.reasoning_summary
             FROM dispute_automation.cases c
             LEFT JOIN LATERAL (SELECT id,recommendation,reasoning_summary FROM dispute_automation.investigations
                WHERE case_id=c.id AND status='completed' ORDER BY completed_at DESC LIMIT 1) i ON true
-            LEFT JOIN LATERAL (SELECT id FROM dispute_automation.submissions WHERE case_id=c.id ORDER BY submitted_at DESC LIMIT 1) s ON true
+            LEFT JOIN LATERAL (SELECT id,submitted_at,dispute_text FROM dispute_automation.submissions WHERE case_id=c.id ORDER BY submitted_at DESC LIMIT 1) s ON true
             LEFT JOIN dispute_automation.outcomes o ON o.submission_id=s.id
             LEFT JOIN dispute_automation.recovery_adjustments r ON r.submission_id=s.id
-            WHERE c.tenant_id=$1 AND c.platform=$5 AND c.platform_store_id=$2
-              AND c.platform_order_id<>$4 AND ($3::text IS NULL OR lower(c.issue_category)=lower($3))
-            GROUP BY c.id,c.platform_order_id,c.issue_category,c.error_amount,c.created_at,o.decision_status,o.awarded_amount,i.recommendation,i.reasoning_summary
-            ORDER BY c.created_at DESC LIMIT 8`,
+            WHERE c.tenant_id=$1 AND c.platform=$5 AND c.platform_store_id=$2 AND c.platform_order_id<>$4
+            GROUP BY c.id,c.platform_order_id,c.issue_category,c.error_amount,c.created_at,s.id,s.submitted_at,s.dispute_text,o.decision_status,o.awarded_amount,i.recommendation,i.reasoning_summary
+            ORDER BY (s.id IS NOT NULL) DESC, ($3::text IS NOT NULL AND lower(c.issue_category)=lower($3)) DESC, c.created_at DESC LIMIT 8`,
           [tenant, storeId, category, orderId, platform],
         );
         return rows;

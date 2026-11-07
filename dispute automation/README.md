@@ -18,6 +18,24 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
 
+## Backend 0.6.0: an agent that fights for the money, on Vercel AI Gateway, with every step logged
+
+- **New goal.** The agent disputes every error charge unless the evidence clearly shows the store made the mistake, and argues
+  the strongest honest case. It never makes up facts: anything unconfirmed goes in the draft as `[verify]`. `dispute` is now the
+  default; `do_not_dispute` needs clear proof of the store's mistake. Drafts read like a store manager wrote them.
+  PROMPT_VERSION `2026-11-07.win-1`.
+- **Model.** With `AI_GATEWAY_API_KEY` set, the agent runs on Vercel AI Gateway, model `AI_MODEL` (default
+  `anthropic/claude-haiku-5.5`). Without it, the service keeps using OpenAI directly (`OPENAI_API_KEY`, `OPENAI_MODEL`).
+  `/healthz` shows the model in use.
+- **Every agent step is logged** as one JSON line in Render's Logs tab: `agent_run_started` (model, order, question),
+  `agent_model_replied` (tokens in/out, tools it asked for), `agent_tool_called` / `agent_tool_finished` (rows, time),
+  `agent_run_finished` (verdict, total tokens, cost, time) and `agent_answer` (the full reply and draft). Failures log
+  `agent_run_failed`. Search the logs for a run id to follow one run.
+- **Learning from this store's past disputes.** `find_similar_disputes` now returns, for the same store and platform, the dispute
+  text that was filed and its result. When an order filed through KoreFi is opened again and its page shows a new decision
+  ("Dispute rejected", "approved", "in review"), the result is saved to `outcomes`. A status the page already showed when the
+  dispute was filed is not counted, since it belongs to an older dispute.
+
 ## What changed in v0.11.0: no masking
 
 - **Everything is captured as the page shows it**, on every platform: the screenshot has no black boxes, and the page text

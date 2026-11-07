@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { PROMPT_VERSION, UNRESOLVED_STORE } from './constants.mjs';
+import { PROMPT_VERSION, UNRESOLVED_STORE, modelConfig } from './constants.mjs';
 import { HttpError, idParam, readToken, requiredString, sanitizeCapture, sanitizeConfirm, sanitizeConversationStart, sanitizeMessage } from './validation.mjs';
 
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
@@ -7,7 +7,7 @@ const MAX_CONCURRENT_RUNS = 4;
 // Two captures of a long order with customer photos fit; more than that should be a new chat.
 const MAX_IMAGES_PER_CONVERSATION = 24;
 const DAY_MS = 86_400_000;
-const VERSION = '0.5.1';
+const VERSION = '0.6.0';
 const PLATFORM_NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 
 const sha = (s) => createHash('sha256').update(s).digest();
@@ -73,6 +73,16 @@ export function createIdempotency({ ttlMs = 15 * 60_000, max = 500, now = Date.n
 
 const reply = (code, body, headers = {}) => ({ code, body, headers });
 
+/** The platform's decision on a dispute, as an order page shows it ("Dispute rejected"), in the outcomes table's terms. */
+export function pageDecision(status) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'approved') return 'won';
+  if (['denied', 'rejected', 'declined'].includes(s)) return 'denied';
+  if (['pending', 'in review', 'submitted'].includes(s)) return 'pending';
+  return null;
+}
+
+
 /** Database trouble the operator cannot fix is a 503 with a plain message, not a bare 500. */
 function toHttpError(err) {
   if (err instanceof HttpError) return err;
@@ -86,7 +96,7 @@ function toHttpError(err) {
 
 export function createApp({ store, investigate, env = process.env, log = (line) => console.log(line), now = Date.now }) {
   const TENANT = env.TENANT_ID || 'korefi-internal-poc'; // Single internal tenant. Real tenant auth is required before external rollout.
-  const MODEL = env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const MODEL = modelConfig(env)?.id ?? 'unconfigured';
   const RUN_TIMEOUT_MS = Number(env.RUN_TIMEOUT_MS || 110_000);
   const IMAGE_BUDGET_BYTES = Number(env.IMAGE_BUDGET_MB || 200) * 1024 * 1024;
   const retentionDays = Number(env.IMAGE_RETENTION_DAYS || 30);
@@ -171,7 +181,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
 
   async function runJob({ caseId, id, request }) {
     try {
-      const result = await withTimeout(investigate({ store, tenant: TENANT, request, runId: id, env }), RUN_TIMEOUT_MS, 'The agent took too long. Please try again.');
+      const result = await withTimeout(investigate({ store, tenant: TENANT, request, runId: id, env, log }), RUN_TIMEOUT_MS, 'The agent took too long. Please try again.');
       await store.completeInvestigation(id, result);
       await store.setCaseStatus(caseId, result.recommendation === 'dispute' ? 'ready_to_dispute' : 'captured');
     } catch (err) {
@@ -184,7 +194,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
   }
 
   async function startInvestigation(req, who) {
-    if (!env.OPENAI_API_KEY) throw new HttpError(503, 'AI provider not configured');
+    if (!modelConfig(env)) throw new HttpError(503, 'AI provider not configured');
     const body = await jsonBody(req);
     const request = sanitizeCapture(body);
     const operator = who.operator || requiredString(body.operator_id, 'operator_id', 128);
@@ -308,7 +318,17 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     const operator = who.operator || requiredString(body.operator_id, 'operator_id', 128);
     if (p.screenshots.length > MAX_IMAGES_PER_CONVERSATION) throw new HttpError(422, 'Too many images');
     p.storeId = p.storeId || (await store.resolveStore(p.orderId, p.platform).catch(() => null)) || UNRESOLVED_STORE;
+    // The dispute status this order showed the last time it was captured, before this capture replaces it.
+    const before = await Promise.resolve(store.findCase(TENANT, p.orderId, [p.storeId], p.platform)).catch(() => null);
+    const seen = before ? (await Promise.resolve(store.getCaseFacts(before.id)).catch(() => null))?.structured_facts?.disputeStatus : null;
     const c = await store.upsertCase(TENANT, operator, p);
+    // An order reopened after its dispute was decided: save the result on the KoreFi filing, so later cases at this store
+    // learn from it. Only a change counts: a page that already said "rejected" when the dispute was filed is an older decision.
+    const decision = pageDecision(p.facts?.disputeStatus);
+    if (decision && decision !== pageDecision(seen)) {
+      const saved = await Promise.resolve(store.recordOutcome?.(c.id, decision)).catch(() => null);
+      if (saved?.changed) log(JSON.stringify({ level: 'info', event: 'dispute_outcome_recorded', case: String(c.id), order: p.orderId, result: decision, previous: saved.previous }));
+    }
     const id = await store.createConversation(TENANT, c.id, operator, p.title || `Order ${p.orderId}`);
     const images = await storeImages({ id, case_id: c.id }, p.screenshots);
     void audit(c.id, 'operator', operator, 'conversation_opened', { conversation_id: String(id), images: images.stored });
@@ -381,7 +401,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
         conversation: [],
       };
       const { transcript: next, ...result } = await withTimeout(
-        investigate({ store, tenant: TENANT, request, runId: id, env, transcript, images }),
+        investigate({ store, tenant: TENANT, request, runId: id, env, transcript, images, log }),
         RUN_TIMEOUT_MS,
         'The agent took too long. Please try again.',
       );
@@ -407,7 +427,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
 
   async function postMessage(req, who, convId) {
     await requireChats();
-    if (!env.OPENAI_API_KEY) throw new HttpError(503, 'AI provider not configured');
+    if (!modelConfig(env)) throw new HttpError(503, 'AI provider not configured');
     const body = await jsonBody(req);
     const message = sanitizeMessage(body);
     const conv = await store.getConversation(TENANT, convId);
@@ -493,7 +513,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     if (req.method === 'GET' && path === '/readyz') {
       const ok = await store.ready();
       const chats = store.conversationsReady ? ((await store.ensureConversations?.())?.ready ? 'ready' : 'missing') : 'ready';
-      return reply(200, { ok, db: ok ? 'connected' : 'unavailable', conversations: chats, model_configured: !!env.OPENAI_API_KEY, store_restrictions: 'derived_from_order' });
+      return reply(200, { ok, db: ok ? 'connected' : 'unavailable', conversations: chats, model_configured: !!modelConfig(env), model: MODEL, store_restrictions: 'derived_from_order' });
     }
     if (req.method === 'POST' && path === '/v1/investigations') return once(() => startInvestigation(req, who));
     const poll = path.match(/^\/v1\/investigations\/([A-Za-z0-9_-]{1,64})$/);
@@ -516,7 +536,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     cors(req, res);
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && url.pathname === '/healthz') {
-      return send(res, reply(200, { ok: true, service: 'korefi-pi-dispute-agent', version: VERSION, commit: (env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, uptime_s: Math.round((now() - startedAt) / 1000) }));
+      return send(res, reply(200, { ok: true, service: 'korefi-pi-dispute-agent', version: VERSION, model: MODEL, commit: (env.RENDER_GIT_COMMIT || '').slice(0, 7) || null, uptime_s: Math.round((now() - startedAt) / 1000) }));
     }
     if (req.method === 'OPTIONS') return send(res, reply(204));
     const who = auth(req);

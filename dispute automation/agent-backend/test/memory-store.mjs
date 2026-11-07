@@ -8,6 +8,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
   const cases = [];
   const investigations = [];
   const submissions = [];
+  const outcomes = [];
   const toolCalls = [];
   const events = [];
   const conversations = [];
@@ -23,6 +24,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     cases,
     investigations,
     submissions,
+    outcomes,
     events,
     conversations,
     messages,
@@ -107,6 +109,16 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
       const c = cases.find((x) => x.id === caseId);
       if (c) c.status = 'submitted';
       return { id: s.id, submitted_at: s.submittedAt, already_recorded: false };
+    },
+    async recordOutcome(caseId, decision) {
+      const s = submissions.filter((x) => x.caseId === caseId).at(-1);
+      if (!s) return null;
+      const o = outcomes.find((x) => x.submissionId === s.id);
+      if (o?.decision === decision) return { changed: false };
+      const previous = o?.decision ?? null;
+      if (o) o.decision = decision;
+      else outcomes.push({ submissionId: s.id, decision });
+      return { submission_id: s.id, previous, changed: true };
     },
     // ---- conversations ----
     async getCaseFacts(caseId) {

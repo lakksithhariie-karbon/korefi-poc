@@ -302,3 +302,46 @@ test('an Uber Eats chat keeps its platform from capture to filing', async () => 
     s.close();
   }
 });
+
+test('a decision shown on a reopened order is saved on the KoreFi filing, once, and only when it changed', async () => {
+  const s = await start();
+  try {
+    const facts = (status) => ({ structured_facts: { items: [], disputeStatus: status } });
+    // Never filed through KoreFi: a decision on the page is not ours to record.
+    await open(s, { order_id: 'NOFILE01', ...facts('rejected') });
+    assert.equal(s.store.outcomes.length, 0);
+
+    const c = await open(s, facts('available'));
+    await s.json('POST', '/v1/disputes/confirm', { operator_id: 'ops-1', conversation_id: c.conversation_id, order_id: 'ABC12345', dispute_text: 'We dispute.', disputed_at: '2026-11-07T12:00:00Z' });
+    await open(s, facts('in review'));
+    assert.deepEqual(s.store.outcomes.map((o) => o.decision), ['pending']);
+    await open(s, facts('rejected'));
+    assert.deepEqual(s.store.outcomes.map((o) => o.decision), ['denied']);
+    await open(s, facts('rejected'));
+    assert.deepEqual(s.store.outcomes.map((o) => o.decision), ['denied'], 'the same decision seen again changes nothing');
+
+    // Filed while the page still showed an older rejection: that rejection is not the result of our filing.
+    const d = await open(s, { order_id: 'OLDREJ01', ...facts('rejected') });
+    await s.json('POST', '/v1/disputes/confirm', { operator_id: 'ops-1', conversation_id: d.conversation_id, order_id: 'OLDREJ01', dispute_text: 'Please look again.', disputed_at: '2026-11-07T12:00:00Z' });
+    await open(s, { order_id: 'OLDREJ01', ...facts('rejected') });
+    assert.equal(s.store.outcomes.length, 1);
+    await open(s, { order_id: 'OLDREJ01', ...facts('approved') });
+    assert.deepEqual(s.store.outcomes.map((o) => o.decision), ['denied', 'won']);
+  } finally {
+    s.close();
+  }
+});
+
+test('the agent is ready with only the Vercel AI Gateway key, and health shows the model', async () => {
+  const s = await start({ env: { OPENAI_API_KEY: '', AI_GATEWAY_API_KEY: 'vck-test' } });
+  try {
+    const h = await s.json('GET', '/healthz');
+    assert.equal(h.model, 'anthropic/claude-haiku-5.5');
+    const c = await open(s);
+    const sent = await s.call('POST', `/v1/conversations/${c.conversation_id}/messages`, { operator_id: 'ops-1', text: 'Can we dispute?' });
+    assert.equal(sent.status, 202);
+  } finally {
+    s.release();
+    s.close();
+  }
+});
