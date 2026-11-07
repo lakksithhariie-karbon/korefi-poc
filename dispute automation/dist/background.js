@@ -8,7 +8,7 @@
   var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
   var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
   var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$/i;
+  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$|^\d+ orders?$/i;
   var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
   var MONTHS = {
     january: 0,
@@ -342,7 +342,7 @@
   var CAPTURE_GAP_MS = 600;
   var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   var withheld = (why) => ({ image: null, note: `No screenshot: ${why}` });
-  var CANNOT_HIDE = "personal details could not be located on the page, so nothing was captured. The assistant will work from the redacted page text.";
+  var CANNOT_HIDE = "the customer\u2019s details could not be found to hide, so only the page text was kept.";
   async function takeRedactedScreenshot(tab) {
     if (!tab.active || tab.id === void 0 || tab.windowId === void 0) {
       return { image: null, note: "No screenshot: the order tab is not the active tab. Switch to it and capture again." };

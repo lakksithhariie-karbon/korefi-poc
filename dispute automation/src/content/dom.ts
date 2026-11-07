@@ -8,7 +8,9 @@ const ORDER_HEADINGS: Record<Platform, RegExp> = {
   grubhub: /(^|\n)Order\s*#?\s*[A-Z0-9-]{4,}/,
 };
 const PROFILE_TEXT =
-  /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$/i;
+  /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$|^\s*\d+\s+orders?\s*$/i;
+/** Pages join names with non-breaking spaces and line breaks; compare text with all whitespace folded to one space. */
+const fold = (s: string) => s.replace(/\s+/g, ' ').trim();
 const FALLBACK_BLOCK_HEIGHT = 170;
 /** Where the platform itself marks personal fields (FullStory masking, used by Uber Eats Manager). */
 const MASKED = '.fs-mask, [data-fs-mask], [data-private]';
@@ -164,13 +166,14 @@ export function redactionRects(root: HTMLElement, names: string[], platform: Pla
   const texts: { node: Text; text: string }[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-    const text = (node.textContent ?? '').trim();
+    const text = fold(node.textContent ?? '');
     if (text) texts.push({ node, text });
   }
+  const wanted = [...new Set(names.map(fold).filter(Boolean))];
 
   let traces = 0;
   for (const { node, text } of texts) {
-    const name = names.find((n) => text.includes(n));
+    const name = wanted.find((n) => text.includes(n));
     if (name) found.add(name);
     if (!name && !PROFILE_TEXT.test(text) && !COMMENTER.test(text) && !hits(EMAIL, text) && !hits(PHONE, text)) continue;
     const row = rowRect(node, root);
@@ -205,18 +208,41 @@ export function redactionRects(root: HTMLElement, names: string[], platform: Pla
   }
   for (const r of personPictures(root)) rects.push(toRect(r, 2));
 
-  if (names.some((n) => !found.has(n))) return null;
+  // A name split across elements ("Jeff <span>J</span>") is in no single text node: cover the smallest element holding all of it.
+  for (const n of wanted) {
+    if (found.has(n)) continue;
+    const el = smallestHolding(root, n);
+    if (!el) continue;
+    rects.push(toRect(rowRect(el, root) ?? el.getBoundingClientRect()));
+    found.add(n);
+    traces++;
+  }
+
+  if (wanted.some((n) => !found.has(n))) return null;
   // Uber Eats has no Customer label to anchor on, so it needs a name or a platform-marked field before anything is captured.
-  if (platform !== 'doordash' && names.length === 0 && masked === 0) return null;
+  if (platform !== 'doordash' && wanted.length === 0 && masked === 0) return null;
   if (traces + masked === 0) return null;
   return rects.filter((r) => visible(r, vp));
+}
+
+function smallestHolding(root: HTMLElement, name: string): HTMLElement | null {
+  let best: HTMLElement | null = null;
+  let bestLength = Infinity;
+  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+    const text = fold(el.textContent ?? '');
+    if (text.length < bestLength && text.length <= name.length + 40 && text.includes(name)) {
+      best = el;
+      bestLength = text.length;
+    }
+  }
+  return best;
 }
 
 /** Text the platform marks as private, so it can be removed from page text as well as from pixels. */
 export function maskedTexts(root: HTMLElement): string[] {
   return [...root.querySelectorAll<HTMLElement>(MASKED)]
     .flatMap((el) => el.innerText.split('\n'))
-    .map((t) => t.trim())
+    .map(fold)
     .filter((t) => t.length >= 2 && t.length <= 60);
 }
 

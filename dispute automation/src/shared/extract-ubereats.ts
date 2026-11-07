@@ -10,7 +10,8 @@ const TIME24 = /^\d{1,2}:\d{2}$/;
 const QTY = /^\d{1,3}$/;
 const OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
 const FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
-const CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since/i;
+// Profile lines under the customer's name: "New customer", "27 orders". They are hidden, but they are not names.
+const CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since|^\d+\s+orders?$/i;
 const COURIER_NOISE = /^\d{1,3}%$|orders? delivered|^Rate$|^(courier|delivery person|driver)$/i;
 const STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
 const MONTHS: Record<string, number> = {

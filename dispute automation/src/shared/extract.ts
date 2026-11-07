@@ -14,7 +14,7 @@ const DISPUTE_CHIP = /^Dispute (approved|denied|rejected|declined|pending|in rev
 const REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
 const TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
 const QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-const PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$/i;
+const PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$|^\d+ orders?$/i;
 const UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
 
 const MONTHS: Record<string, number> = {
@@ -241,9 +241,10 @@ function escapeRegExp(s: string): string {
 
 /** Removes personal names, customer profile lines and avatar initials from page text. Names match whole words only. */
 export function redactText(text: string, names: string[]): string {
+  // Whitespace is folded first so a name written with a non-breaking space still matches.
   let out = text
     .split(/\r?\n/)
-    .map((l) => l.trim())
+    .map((l) => l.replace(/\s+/g, ' ').trim())
     .filter((l) => l.length > 0)
     .filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l))
     .join('\n');

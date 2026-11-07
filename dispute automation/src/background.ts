@@ -87,8 +87,7 @@ const CAPTURE_GAP_MS = 600;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const withheld = (why: string) => ({ image: null, note: `No screenshot: ${why}` });
-const CANNOT_HIDE =
-  'personal details could not be located on the page, so nothing was captured. The assistant will work from the redacted page text.';
+const CANNOT_HIDE = 'the customer’s details could not be found to hide, so only the page text was kept.';
 
 /**
  * Scrolls the order sheet one screen at a time, screenshots each screen, blacks out personal details in each one,

@@ -1,0 +1,39 @@
+JJ
+Jeff J
+27 orders
+Order 5DE2A
+2 Nov 2026
+Odd One Out Tea (Santa Monica) (1260 3rd Street Promenade)
+3 Customisations reported missing
+$2.85 deducted from net payout
+Customer reported 3 customisations missing. If you believe this is an error, you can submit a dispute. Dispute access is available to authorised users only.
+Dispute
+Order details
+13:12
+Order placed by customer
+13:12
+Order accepted by POS integration
+13:12
+Order confirmed by shop
+14:42
+Order picked up by customer
+1
+Icy Peak Milk Tea
+1 customisation missing
+$9.44
+22oz/Large- COLD DRINK ONLY
+1
+Large size (22oz)- COLD DRINK ONLY
+$1.00
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+No Ice
+Sales (excl. tax)
+US$10.44
+Chargeback amount
+Dispute
+-US$2.85
+Marketplace Fee
+-US$3.13
+Net payout
+US$4.46

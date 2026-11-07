@@ -71,3 +71,16 @@ test('platform and IDs come from the address', () => {
   assert.equal(findStoreId(`https://merchants.ubereats.com/manager/orders?restaurantUUID=${uuid.toUpperCase()}`, '', 'ubereats'), uuid);
   assert.equal(findStoreId('https://merchants.ubereats.com/manager/orders', 'Store ID 12345', 'ubereats'), null);
 });
+
+test('a pickup order with "27 orders" under the name', () => {
+  const text = readFileSync(new URL('../fixtures/ubereats-5DE2A-pickup.txt', import.meta.url), 'utf8').replace('Jeff J', 'Jeff J');
+  const { snapshot: s, names } = parseUberOrder(text);
+  assert.equal(s.orderId, '5DE2A');
+  assert.deepEqual(names.sort(), ['JJ', 'Jeff J'], 'the order count is profile info, not a name; the non-breaking space is folded');
+  assert.equal(s.errorChargeTotal, -2.85);
+  assert.equal(s.errorCharges[0].item, 'Icy Peak Milk Tea');
+  assert.equal(s.errorCharges[0].reason, '1 customisation missing');
+  assert.equal(s.fulfillment, null);
+  const out = redactText(text, names);
+  assert.ok(!/Jeff|\bJJ\b|27 orders/.test(out), out.slice(0, 120));
+});

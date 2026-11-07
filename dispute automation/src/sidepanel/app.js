@@ -56,6 +56,7 @@
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   const isPlaceholder = c => String(c?.orderId||'').startsWith('SCREENSHOT-');
   const plural = (n, one, many) => `${n} ${n===1?one:many}`;
+  const trimDot = s => String(s).replace(/[.\s]+$/,'');
   function toast(s) {
     const el=$('toast');el.textContent=s;el.hidden=!s;clearTimeout(toastTimer);
     if(s)toastTimer=setTimeout(()=>{el.hidden=true;},4000);
@@ -221,7 +222,7 @@
     if(fromCapture&&conversationId&&current&&c.orderId===current.orderId){
       attachedCase=c;captureAttachment();
       await patchCase(c.id,{conversationId}).catch(()=>{});
-      toast(c.image?(c.imageNote?`Attached. ${c.imageNote}`:'Attached. Send a message to share it'):(c.imageNote||'Page read')+'. Send a message to share it');
+      toast(c.image?(c.imageNote?`Attached. ${c.imageNote}`:'Attached. Send a message to share it'):`${trimDot(c.imageNote||'Page read')}. Send a message to share it`);
       return;
     }
     if(fromCapture||(current&&current.id!==c.id))resetChatState();
@@ -229,7 +230,7 @@
     draftText=analysis?.draft_text||filing?.filing?.draft||'';draftCopied=false;copiedText='';
     attachedCase=c.image&&!c.conversationId?c:null;
     captureAttachment();
-    if(fromCapture&&!c.image)toast((c.imageNote||'Page read without a screenshot')+'. You can still ask about it');
+    if(fromCapture&&!c.image)toast(`${trimDot(c.imageNote||'Page read without a screenshot')}. You can still ask about it`);
     else if(fromCapture&&c.imageNote)toast(c.imageNote);
     if(filing)renderFiling(filing);
   }

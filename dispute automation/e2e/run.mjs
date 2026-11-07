@@ -24,6 +24,7 @@ const svg = (body, w, h) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns
 const FACE = svg('<circle cx="22" cy="22" r="22" fill="#ff00ff"/>', 44, 44);
 const PHOTO = (w, h) => svg(`<rect width="${w}" height="${h}" fill="#f08a00"/><rect x="20" y="20" width="${w / 3}" height="${h / 4}" fill="#ffd27a"/>`, w, h);
 const UBER_STORE = '3f2c9a1e-5b7d-4c11-9a0e-1234567890ab';
+const pickupFixture = readFileSync(path.join(root, 'fixtures', 'ubereats-5DE2A-pickup.txt'), 'utf8').split('\n').filter(Boolean);
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const STYLE = `<style>
   body{font:14px system-ui;margin:0;background:#f4f4f4}h1{margin:24px}
@@ -105,8 +106,25 @@ function uberPage() {
       <div style="overflow:auto;width:100%;padding:16px;box-sizing:border-box">${parts.join('')}</div></div></body></html>`;
 }
 
+/**
+ * The real pickup order that failed: no courier, "27 orders" under the name, and the name written the way the live page
+ * writes it, with a non-breaking space and the last initial in its own element, so no single text node holds "Jeff J".
+ */
+function uberPickupPage() {
+  const L = pickupFixture;
+  const parts = [
+    `<div class="row"><span class="av fs-mask pii">${L[0]}</span><div><div class="fs-mask pii">Jeff&nbsp;<span>J</span></div><div class="sub">${L[2]}</div></div></div>`,
+    ...L.slice(3).map((l) => `<div class="line">${esc(l)}</div>`),
+  ];
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Uber Eats Manager</title>${STYLE}<style>.pii{color:#00e5ff;font-weight:700;font-size:18px}</style></head>
+    <body><div data-baseweb="block"><h1>Orders</h1></div>
+    <div data-baseweb="block" style="position:fixed;right:0;top:0;width:500px;height:100vh;display:flex;background:#fff">
+      <div style="overflow:auto;width:100%;padding:16px;box-sizing:border-box">${parts.join('')}</div></div></body></html>`;
+}
+
 const pageFor = (url) => {
   const p = new URL(url, 'http://x').pathname;
+  if (p.startsWith('/ubereats-pickup')) return uberPickupPage();
   return p === '/changed' ? changedPage() : p === '/unknown' ? unknownPage() : p.startsWith('/ubereats') ? uberPage() : orderPage();
 };
 const makePortal = () =>
@@ -477,6 +495,18 @@ try {
   await uber.screenshot({ path: path.join(out, 'ubereats-mock.png') });
   writeFileSync(path.join(out, 'ubereats-captured.jpg'), Buffer.from(u.image.split(',')[1], 'base64'));
   writeFileSync(path.join(out, 'ubereats-photo.jpg'), Buffer.from(u.photos[0].split(',')[1], 'base64'));
+
+  // 13. The pickup order from the live portal: the name is split across elements with a non-breaking space.
+  await panel.click('#newChat');
+  const pickup = await context.newPage();
+  await pickup.goto(`http://localhost:${portalPort}/ubereats-pickup`);
+  const p = await capture(pickup, `http://localhost:${portalPort}/ubereats-pickup*`);
+  check('pickup order: a screenshot is taken (the name is found even when split)', !!p?.image && p.orderId === '5DE2A', String(p?.imageNote));
+  const pShot = p?.image ? await colours(p.image) : null;
+  check('pickup order: the name and initials are blacked out', !!pShot && pShot.cyan < 20, JSON.stringify(pShot));
+  check('pickup order: no name or order count in the text', !!p && !/Jeff|\bJJ\b|27 orders/.test(p.redactedText + JSON.stringify(p.snapshot)));
+  check('pickup order: no customer photo is invented', Array.isArray(p?.photos) && p.photos.length === 0);
+  if (p?.image) writeFileSync(path.join(out, 'ubereats-pickup-captured.jpg'), Buffer.from(p.image.split(',')[1], 'base64'));
 
   await panel.screenshot({ path: path.join(out, 'panel-final.png') });
   await panel.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));

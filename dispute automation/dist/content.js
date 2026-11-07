@@ -8,7 +8,7 @@
   var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
   var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
   var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$/i;
+  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$|^\d+ orders?$/i;
   var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
   var MONTHS = {
     january: 0,
@@ -215,7 +215,7 @@
     return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
   function redactText(text, names) {
-    let out = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l)).join("\n");
+    let out = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => l.length > 0).filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l)).join("\n");
     for (const n of [...names].sort((a, b) => b.length - a.length)) {
       out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(n)}(?![A-Za-z0-9])`, "g"), "[PERSON]");
     }
@@ -230,7 +230,7 @@
   var QTY2 = /^\d{1,3}$/;
   var OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
   var FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
-  var CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since/i;
+  var CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since|^\d+\s+orders?$/i;
   var COURIER_NOISE = /^\d{1,3}%$|orders? delivered|^Rate$|^(courier|delivery person|driver)$/i;
   var STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
   var MONTHS2 = {
@@ -518,7 +518,8 @@
     ubereats: /(^|\n)Order\s+[A-Z0-9]{4,16}\s*(\n|$)/,
     grubhub: /(^|\n)Order\s*#?\s*[A-Z0-9-]{4,}/
   };
-  var PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$/i;
+  var PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$|^\s*\d+\s+orders?\s*$/i;
+  var fold = (s) => s.replace(/\s+/g, " ").trim();
   var FALLBACK_BLOCK_HEIGHT = 170;
   var MASKED = ".fs-mask, [data-fs-mask], [data-private]";
   var PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-baseweb="drawer"], [role="dialog"], [aria-modal="true"]';
@@ -630,12 +631,13 @@ ${text}
     const texts = [];
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-      const text = (node.textContent ?? "").trim();
+      const text = fold(node.textContent ?? "");
       if (text) texts.push({ node, text });
     }
+    const wanted = [...new Set(names.map(fold).filter(Boolean))];
     let traces = 0;
     for (const { node, text } of texts) {
-      const name = names.find((n) => text.includes(n));
+      const name = wanted.find((n) => text.includes(n));
       if (name) found.add(name);
       if (!name && !PROFILE_TEXT.test(text) && !COMMENTER.test(text) && !hits(EMAIL, text) && !hits(PHONE, text)) continue;
       const row = rowRect(node, root);
@@ -667,13 +669,33 @@ ${text}
       masked++;
     }
     for (const r of personPictures(root)) rects.push(toRect(r, 2));
-    if (names.some((n) => !found.has(n))) return null;
-    if (platform2 !== "doordash" && names.length === 0 && masked === 0) return null;
+    for (const n of wanted) {
+      if (found.has(n)) continue;
+      const el = smallestHolding(root, n);
+      if (!el) continue;
+      rects.push(toRect(rowRect(el, root) ?? el.getBoundingClientRect()));
+      found.add(n);
+      traces++;
+    }
+    if (wanted.some((n) => !found.has(n))) return null;
+    if (platform2 !== "doordash" && wanted.length === 0 && masked === 0) return null;
     if (traces + masked === 0) return null;
     return rects.filter((r) => visible(r, vp));
   }
+  function smallestHolding(root, name) {
+    let best = null;
+    let bestLength = Infinity;
+    for (const el of root.querySelectorAll("*")) {
+      const text = fold(el.textContent ?? "");
+      if (text.length < bestLength && text.length <= name.length + 40 && text.includes(name)) {
+        best = el;
+        bestLength = text.length;
+      }
+    }
+    return best;
+  }
   function maskedTexts(root) {
-    return [...root.querySelectorAll(MASKED)].flatMap((el) => el.innerText.split("\n")).map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 60);
+    return [...root.querySelectorAll(MASKED)].flatMap((el) => el.innerText.split("\n")).map(fold).filter((t) => t.length >= 2 && t.length <= 60);
   }
   function scrolls(el, minHeight) {
     return /(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY) && el.clientHeight >= minHeight && el.scrollHeight > el.clientHeight + 4;
