@@ -120,12 +120,15 @@ test('more evidence can be added mid-chat, up to a limit', async () => {
     await s.finish(m.investigation_id);
     assert.equal(s.calls[0].images.length, 3);
     assert.equal(s.calls[0].request.additionalText, 'extra page text');
-    const more = await s.json('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'more photos', screenshots: Array(6).fill(jpeg('x')) });
+    const more = await s.json('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'more photos', screenshots: Array(9).fill(jpeg('x')) });
     await s.finish(more.investigation_id);
-    assert.equal(s.calls[1].images.length, 9);
-    const full = await s.call('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'even more', screenshots: Array(6).fill(jpeg('y')) });
+    assert.equal(s.calls[1].images.length, 12);
+    const again = await s.json('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'a new capture', screenshots: Array(9).fill(jpeg('z')) });
+    await s.finish(again.investigation_id);
+    assert.equal(s.calls[2].images.length, 21);
+    const full = await s.call('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'even more', screenshots: Array(9).fill(jpeg('y')) });
     assert.equal(full.status, 422);
-    assert.match((await full.json()).error, /at most 12 images/);
+    assert.match((await full.json()).error, /at most 24 images/);
   } finally {
     s.close();
   }
@@ -235,7 +238,7 @@ test('conversation routes need a token and validate their input', async () => {
     assert.equal((await s.call('POST', '/v1/conversations', { order_id: 'ABC12345' }, null)).status, 401);
     assert.equal((await s.call('POST', '/v1/conversations', { operator_id: 'o', order_id: 'bad id!' })).status, 422);
     const c = await open(s);
-    for (const body of [{}, { text: '' }, { text: 'x'.repeat(1300) }, { text: 'ok', screenshots: ['nope'] }, { text: 'ok', screenshots: Array(7).fill(jpeg('x')) }]) {
+    for (const body of [{}, { text: '' }, { text: 'x'.repeat(1300) }, { text: 'ok', screenshots: ['nope'] }, { text: 'ok', screenshots: Array(10).fill(jpeg('x')) }]) {
       assert.equal((await s.call('POST', `/v1/conversations/${c.conversation_id}/messages`, body)).status, 422, JSON.stringify(body).slice(0, 60));
     }
   } finally {
@@ -275,6 +278,26 @@ test('a run that finishes between the poll reading it and checking it is not rep
     const polled = await s.json('GET', `/v1/investigations/${m.investigation_id}`);
     assert.equal(polled.status, 'completed');
     assert.equal(reads, 2, 'it looked again before deciding');
+  } finally {
+    s.close();
+  }
+});
+
+test('an Uber Eats chat keeps its platform from capture to filing', async () => {
+  const s = await start();
+  try {
+    const c = await open(s, { platform: 'ubereats', order_id: 'D2D46', order_url: 'https://merchants.ubereats.com/manager/orders/x' });
+    const m = await s.json('POST', `/v1/conversations/${c.conversation_id}/messages`, { text: 'Can we dispute this?' });
+    await s.finish(m.investigation_id);
+    assert.equal(s.calls[0].request.platform, 'ubereats');
+    const list = await s.json('GET', '/v1/conversations');
+    assert.equal(list.conversations[0].platform, 'ubereats');
+    const filed = await s.json('POST', '/v1/disputes/confirm', { operator_id: 'ops-1', platform: 'ubereats', conversation_id: c.conversation_id, order_id: 'D2D46', dispute_text: 'x', disputed_at: '2026-11-07T10:00:00Z' });
+    assert.ok(filed.id);
+    assert.ok(s.store.messages.some((x) => x.role === 'system' && /filed in Uber Eats/.test(x.text)));
+    // The same order ID on DoorDash is a different case.
+    const dd = await open(s, { order_id: 'D2D46' });
+    assert.notEqual(dd.case_id, c.case_id);
   } finally {
     s.close();
   }

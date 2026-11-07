@@ -1,123 +1,163 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#161616">
-  <title>KoreFi · Dispute intelligence</title>
+  <title>KoreFi</title>
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <div class="extension" aria-label="KoreFi Dispute Intelligence sidebar">
+  <div class="app">
     <header class="topbar">
-      <button class="icon-button" id="newChat" title="New investigation" aria-label="New investigation" type="button">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M15 4h6v6M21 4l-10 10"/></svg>
+      <button class="icon-button" id="historyButton" type="button" aria-label="Open chats" title="Chats" aria-controls="historyPanel" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
       </button>
-      <button class="icon-button" id="historyButton" type="button" title="Chat history" aria-label="Chat history" aria-controls="historyPanel"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
-      <div class="wordmark">
-        <img id="officialLogo" src="logo.png" alt="KoreFi" referrerpolicy="no-referrer">
-        <span id="logoFallback" class="brand-name" hidden>KoreFi</span>
-        <span class="wordmark-divider"></span>
-        <span class="brand-label">Dispute intelligence</span>
-      </div>
-      <span class="top-spacer"></span>
-      <button id="connectionButton" class="connection connection-button" type="button" aria-label="Configure Pi connection" title="Pi agent connection"><span class="dot" id="connectionDot"></span><span id="connectionLabel">Local</span></button>
-      <button class="icon-button" id="settingsButton" type="button" title="Connection settings" aria-label="Connection settings" aria-expanded="false" aria-controls="settingsPanel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4m12 12 1.4 1.4M2.5 12h2m15 0h2M4.6 19.4 6 18m12-12 1.4-1.4"/><circle cx="12" cy="12" r="4.2"/></svg></button>
+      <button class="order-chip" id="orderChip" type="button" aria-controls="caseMeta" aria-expanded="false" hidden></button>
+      <button class="icon-button" id="newChat" type="button" aria-label="New chat" title="New chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a1.4 1.4 0 0 1 3 3l-9 9a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></svg>
+      </button>
     </header>
-
-    <nav class="tabs" id="tabs" aria-label="Investigation views" hidden>
-      <button class="tab selected" type="button" data-tab="answer" aria-selected="true">Answer</button>
-      <button class="tab" type="button" data-tab="evidence" aria-selected="false">Evidence</button>
-      <button class="tab" type="button" data-tab="draft" aria-selected="false">Draft</button>
-    </nav>
 
     <main class="main" id="main">
       <div class="empty" id="empty">
-        <div class="hero-logo" aria-hidden="true"><svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M7 5v20M7 15h8L23 5M15 15l9 10M17 5h7v7"/></svg></div>
-        <h1>What can I help you resolve?</h1>
-        <p class="hero-desc">Ask about a DoorDash order, or tap <strong>+</strong> to capture the page and attach it to your message.</p>
-        <div class="subtle-prompt">
-          <button type="button" data-query="Can this error charge be disputed?">Assess a dispute</button>
-          <button type="button" data-query="What evidence should I gather?">Find evidence gaps</button>
-        </div>
+        <h1>Which order should we look at?</h1>
+        <p>Open an order in DoorDash or Uber Eats, then tap + to attach it.</p>
       </div>
-      <section class="thread" id="thread" aria-label="Investigation chat" aria-live="polite" hidden></section>
-      <div class="progress" id="progress" role="status" aria-live="polite" hidden></div>
+      <section class="thread" id="thread" aria-label="Chat" aria-live="polite" hidden></section>
+      <div class="thinking" id="progress" role="status" aria-live="polite" hidden></div>
       <div class="suggestions" id="suggestions" hidden></div>
-      <section class="evidence-view" id="evidenceView" aria-label="Evidence" hidden></section>
-      <section class="draft-view" id="draftView" aria-label="Dispute draft" hidden>
-        <span class="section-eyebrow">Prepared response</span>
-        <h2>Dispute draft</h2>
-        <p class="section-lead">Review every claim. You submit the dispute in DoorDash, not here.</p>
-        <textarea id="draftText" class="draft-area" aria-label="Editable dispute draft" placeholder="A factual draft will appear here after investigation." rows="12"></textarea>
-        <div class="draft-controls">
-          <button class="primary" id="copyDraft" type="button">Copy dispute</button>
-          <button class="secondary" id="regenerateDraft" type="button">Regenerate</button>
-        </div>
-        <div class="confirm" id="confirm" hidden>
-          <strong>Did you submit this dispute in DoorDash?</strong>
-          <p>Confirm only after DoorDash has accepted your submission. KoreFi records your confirmation, it does not submit the dispute.</p>
-          <div class="confirm-buttons"><button class="secondary" id="notYet" type="button">Not yet</button><button class="primary" id="yesFiled" type="button">Yes, disputed</button></div>
-        </div>
-        <div class="filing-state" id="filingState" hidden role="status">
-          <strong id="filingTitle"></strong><p id="filingDescription"></p>
-          <button class="secondary" id="retrySync" type="button" hidden>Retry database sync</button>
-        </div>
-        <p class="evidence-hint" id="draftHint">The agent will avoid claims it cannot support.</p>
-      </section>
     </main>
 
-    <footer class="composer-shell">
-      <div class="attachment" id="attachment" hidden>
-        <button id="viewAttachment" class="attachment-thumbnail" type="button" title="View attached screenshot" aria-label="View attached screenshot"><img id="attachmentImage" alt="DoorDash screenshot thumbnail"></button>
-        <div class="attachment-meta"><strong id="attachmentTitle">Order screenshot</strong><span>Attached to your next message</span></div>
-        <button id="removeAttachment" type="button" title="Remove screenshot" aria-label="Remove screenshot"><svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-      </div>
+    <footer class="composer-wrap">
+      <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
       <div class="case-meta" id="caseMeta" hidden>
         <div class="case-meta-row">
-          <label for="metaOrder">Order ID<input id="metaOrder" type="text" autocomplete="off" spellcheck="false" maxlength="64" placeholder="e.g. 3990CBFD"></label>
-          <label for="metaStore">Store ID <span>(optional)</span><input id="metaStore" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="32" placeholder="e.g. 28006527"></label>
-          <button class="secondary" id="saveMeta" type="button">Save</button>
+          <label for="metaOrder">Order ID<input id="metaOrder" type="text" autocomplete="off" spellcheck="false" maxlength="64" placeholder="3990CBFD"></label>
+          <label for="metaStore">Store ID<input id="metaStore" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="32" placeholder="Optional"></label>
+          <button class="button" id="saveMeta" type="button">Save</button>
         </div>
-        <p class="evidence-hint" id="metaHint"></p>
+        <p class="hint" id="metaHint"></p>
       </div>
       <form class="composer" id="chatForm">
-        <textarea id="prompt" rows="2" placeholder="Ask about a DoorDash order…" aria-label="Chat message"></textarea>
-        <div class="composer-bottom">
-          <div class="composer-left">
-            <button class="attach-button" id="capture" type="button" title="Capture and attach DoorDash screenshot" aria-label="Capture screenshot and attach to chat"><svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg></button>
-            <span class="context-indicator"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span id="contextLabel">DoorDash page</span></span>
-          </div>
-          <button class="send-button" id="send" type="submit" aria-label="Send message" disabled><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.2" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+        <div class="attachment" id="attachment" hidden>
+          <button id="viewAttachment" class="attachment-thumb" type="button" aria-label="View attached page"><img id="attachmentImage" alt=""></button>
+          <span class="attachment-title" id="attachmentTitle">Order page</span>
+          <button id="removeAttachment" class="icon-button small" type="button" aria-label="Remove attachment" title="Remove">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+        <textarea id="prompt" rows="1" placeholder="Ask about this order" aria-label="Message"></textarea>
+        <div class="composer-row">
+          <button class="icon-button" id="capture" type="button" aria-label="Attach this order page" title="Attach this page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </button>
+          <button class="send-button" id="send" type="submit" aria-label="Send" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+          </button>
         </div>
       </form>
-      <p class="composer-caption" id="composerCaption">Screenshots are shared only when you send the message</p>
     </footer>
 
-    <section class="settings-panel" id="settingsPanel" hidden aria-labelledby="settingsHeading">
-      <div class="settings-head"><div><span class="section-eyebrow">Agent connection</span><h2 id="settingsHeading">Settings</h2></div><button id="closeSettings" class="icon-button" type="button" aria-label="Close settings">✕</button></div>
-      <p class="section-lead">Screenshots work without connecting. Connect Pi to search Neon and prepare live drafts.</p>
-      <label for="agentUrl">Pi backend URL</label><input type="url" id="agentUrl" value="https://korefi-pi-dispute-agent.onrender.com" spellcheck="false" autocomplete="off">
-      <label for="agentToken">Agent access token</label><input type="password" id="agentToken" placeholder="Your private pilot token" autocomplete="off">
-      <label for="operatorId">Operator ID</label><input type="text" id="operatorId" placeholder="Internal ops identifier" autocomplete="off">
-      <label>Appearance</label><div class="theme-choice" aria-label="Appearance">
-        <button type="button" data-theme-choice="dark" aria-pressed="true">Dark</button>
-        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+    <div class="scrim" id="scrim" hidden></div>
+    <aside class="drawer" id="historyPanel" aria-label="Chats" inert>
+      <div class="drawer-head">
+        <img class="logo" id="officialLogo" src="logo.png" alt="KoreFi">
+        <button class="icon-button" id="closeHistory" type="button" aria-label="Close chats" title="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+        </button>
       </div>
-      <button class="primary settings-save" id="saveSettings" type="button">Save connection</button>
-      <p class="settings-note">Pilot access only. Keep this token private. Future team versions should use operator sign-in instead of a shared token.</p>
-    </section>
-
-    <section class="settings-panel history-panel" id="historyPanel" hidden aria-labelledby="historyHeading">
-      <div class="settings-head"><div><span class="section-eyebrow">Your chats</span><h2 id="historyHeading">History</h2></div><button id="closeHistory" class="icon-button" type="button" aria-label="Close history">✕</button></div>
+      <button class="drawer-row" id="drawerNewChat" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a1.4 1.4 0 0 1 3 3l-9 9a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></svg>
+        <span>New chat</span>
+      </button>
+      <div class="drawer-label">Chats</div>
       <div class="history-list" id="historyList"></div>
+      <div class="drawer-foot">
+        <button class="drawer-row" id="settingsButton" type="button" aria-controls="settingsPanel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+          <span>Settings</span>
+          <span class="status-dot" id="connectionDot" title="Not connected"></span>
+        </button>
+      </div>
+    </aside>
+
+    <section class="sheet" id="draftView" aria-labelledby="draftHeading" hidden>
+      <div class="sheet-head">
+        <button class="icon-button" id="closeDraft" type="button" aria-label="Back to chat" title="Back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <h2 id="draftHeading">Dispute draft</h2>
+      </div>
+      <div class="sheet-body">
+        <p class="lead" id="draftLead">Check every claim, then submit it on the platform yourself.</p>
+        <textarea id="draftText" class="draft-area" aria-label="Dispute draft" placeholder="No draft yet" rows="12"></textarea>
+        <div class="row">
+          <button class="button primary" id="copyDraft" type="button">Copy draft</button>
+          <button class="button" id="regenerateDraft" type="button">Write a new draft</button>
+        </div>
+        <div class="callout" id="confirm" hidden>
+          <strong id="confirmTitle">Did you submit this on the platform?</strong>
+          <p id="confirmText">Confirm only after the platform accepts it. KoreFi records it, it does not submit anything.</p>
+          <div class="row"><button class="button" id="notYet" type="button">Not yet</button><button class="button primary" id="yesFiled" type="button">Yes, mark as disputed</button></div>
+        </div>
+        <div class="callout" id="filingState" role="status" hidden>
+          <strong id="filingTitle"></strong>
+          <p id="filingDescription"></p>
+          <button class="button" id="retrySync" type="button" hidden>Try saving again</button>
+        </div>
+        <p class="hint" id="draftHint"></p>
+      </div>
     </section>
 
-    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Captured screenshot" hidden>
-      <div class="lightbox-head"><span>DoorDash capture</span><button id="closeLightbox" class="icon-button" type="button" aria-label="Close screenshot">✕</button></div>
-      <div class="lightbox-scroll"><img id="lightboxImage" alt="Captured DoorDash page"></div>
+    <section class="sheet" id="evidenceView" aria-labelledby="evidenceHeading" hidden>
+      <div class="sheet-head">
+        <button class="icon-button" id="closeEvidence" type="button" aria-label="Back to chat" title="Back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <h2 id="evidenceHeading">Sources</h2>
+      </div>
+      <div class="sheet-body" id="evidenceBody"></div>
+    </section>
+
+    <section class="sheet" id="settingsPanel" aria-labelledby="settingsHeading" hidden>
+      <div class="sheet-head">
+        <button class="icon-button" id="closeSettings" type="button" aria-label="Back to chat" title="Back">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <h2 id="settingsHeading">Settings</h2>
+      </div>
+      <div class="sheet-body">
+        <div class="field-label">Appearance</div>
+        <div class="segmented" role="group" aria-label="Appearance">
+          <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+        <details class="advanced" id="connection">
+          <summary>Connection</summary>
+          <div class="advanced-body">
+          <label class="field-label" for="agentUrl">Agent URL</label>
+          <input class="input" type="url" id="agentUrl" spellcheck="false" autocomplete="off">
+          <label class="field-label" for="agentToken">Access token</label>
+          <input class="input" type="password" id="agentToken" autocomplete="off">
+          <label class="field-label" for="operatorId">Your name or ID</label>
+          <input class="input" type="text" id="operatorId" autocomplete="off">
+          <button class="button primary" id="saveSettings" type="button">Save</button>
+          <p class="hint">Keep the token private.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Attached page" hidden>
+      <div class="sheet-head">
+        <button id="closeLightbox" class="icon-button" type="button" aria-label="Close" title="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+        <h2>Attached page</h2>
+      </div>
+      <div class="lightbox-scroll"><img id="lightboxImage" alt="Attached order page, with personal details hidden"></div>
     </div>
-    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>
   <script src="sidepanel.js"></script>
 </body>

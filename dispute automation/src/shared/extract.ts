@@ -14,7 +14,7 @@ const DISPUTE_CHIP = /^Dispute (approved|denied|rejected|declined|pending|in rev
 const REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
 const TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
 const QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-const PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$/i;
+const PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$/i;
 const UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
 
 const MONTHS: Record<string, number> = {
@@ -208,6 +208,7 @@ export function parseOrder(rawText: string): ParsedOrder {
   }
 
   const snapshot: OrderSnapshot = {
+    platform: 'doordash',
     orderId,
     placedAtText,
     placedAt: placedAtText ? parsePlacedAt(placedAtText) : null,
@@ -238,7 +239,7 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Removes personal names, customer profile lines and avatar initials from page text. */
+/** Removes personal names, customer profile lines and avatar initials from page text. Names match whole words only. */
 export function redactText(text: string, names: string[]): string {
   let out = text
     .split(/\r?\n/)
@@ -247,7 +248,7 @@ export function redactText(text: string, names: string[]): string {
     .filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l))
     .join('\n');
   for (const n of [...names].sort((a, b) => b.length - a.length)) {
-    out = out.replace(new RegExp(escapeRegExp(n), 'g'), '[PERSON]');
+    out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(n)}(?![A-Za-z0-9])`, 'g'), '[PERSON]');
   }
   return out;
 }

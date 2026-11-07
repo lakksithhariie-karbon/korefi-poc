@@ -1,9 +1,9 @@
 {
   "name": "korefi-dispute-assistant",
-  "version": "0.8.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
-  "description": "DoorDash Chrome side-panel: redacted full-order capture, Pi investigations, editable dispute draft, and operator-confirmed filing log.",
+  "description": "Chrome side panel for DoorDash and Uber Eats disputes: redacted full-order capture with customer photos, agent chats, editable dispute draft, and operator-confirmed filing log.",
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",

@@ -1,18 +1,43 @@
 {
   "manifest_version": 3,
   "name": "KoreFi Dispute Assistant",
-  "version": "0.8.0",
-  "description": "Chat-first KoreFi dispute agent: capture a redacted DoorDash order, investigate with Pi, draft a response, and log what you filed.",
-  "permissions": ["sidePanel", "storage", "unlimitedStorage", "activeTab", "scripting"],
-  "host_permissions": ["https://*.doordash.com/*", "https://korefi-pi-dispute-agent.onrender.com/*"],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
-  "background": { "service_worker": "background.js" },
-  "side_panel": { "default_path": "sidepanel.html" },
-  "action": { "default_title": "KoreFi Dispute Assistant" },
+  "version": "0.10.0",
+  "description": "Ask KoreFi about the DoorDash or Uber Eats order on screen: it checks the evidence, suggests whether to dispute, and drafts the response.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.doordash.com/*",
+    "https://*.ubereats.com/*",
+    "https://korefi-pi-dispute-agent.onrender.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "KoreFi Dispute Assistant"
+  },
   "content_scripts": [
     {
-      "matches": ["https://*.doordash.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://*.doordash.com/*",
+        "https://*.ubereats.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

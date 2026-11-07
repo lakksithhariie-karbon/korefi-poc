@@ -96,3 +96,15 @@ test('the legacy stateless call still works and returns no transcript', async ()
   assert.equal(out.transcript, null);
   assert.equal(out.recommendation, 'needs_review');
 });
+
+test('an Uber Eats turn offers only KoreFi case history, never the DoorDash lookups', async () => {
+  const { streamFn, contexts } = fakeModel();
+  await investigate({ store: createMemoryStore(), tenant: 't', request: request({ platform: 'ubereats', orderId: 'D2D46' }), runId: 1, env: {}, transcript: [], images: [], streamFn });
+  const seen = JSON.stringify(contexts[0]);
+  assert.match(seen, /find_similar_disputes/);
+  assert.doesNotMatch(seen, /get_order_financials|get_store_patterns/);
+  assert.match(seen, /Platform: Uber Eats/);
+  const dd = fakeModel();
+  await investigate({ store: createMemoryStore(), tenant: 't', request: request(), runId: 1, env: {}, transcript: [], images: [], streamFn: dd.streamFn });
+  assert.match(JSON.stringify(dd.contexts[0]), /get_order_financials/);
+});

@@ -1,32 +1,57 @@
 import { COMMENTER, EMAIL, PERSON_LABELS, PHONE, STOP_LABELS } from '../shared/redact.ts';
-import type { Rect, Viewport } from '../shared/types.ts';
+import type { Platform, Rect, Viewport } from '../shared/types.ts';
 
-const ORDER_HEADING = /(^|\n)Order:\s*[A-Z0-9]{4,}/;
-const PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers/i;
+const ORDER_HEADINGS: Record<Platform, RegExp> = {
+  doordash: /(^|\n)Order:\s*[A-Z0-9]{4,}/,
+  // "Order D2D46" on a line of its own; "Order details" is lower case and never matches.
+  ubereats: /(^|\n)Order\s+[A-Z0-9]{4,16}\s*(\n|$)/,
+  grubhub: /(^|\n)Order\s*#?\s*[A-Z0-9-]{4,}/,
+};
+const PROFILE_TEXT =
+  /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$/i;
 const FALLBACK_BLOCK_HEIGHT = 170;
+/** Where the platform itself marks personal fields (FullStory masking, used by Uber Eats Manager). */
+const MASKED = '.fs-mask, [data-fs-mask], [data-private]';
+const PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-baseweb="drawer"], [role="dialog"], [aria-modal="true"]';
+const PHOTO_CONTEXT = /photo|picture|image|feedback|comment|evidence/i;
+export const MAX_PHOTOS = 3;
 
-/** The order side sheet (or the whole page when the order is shown full-screen). */
-export function findOrderRoot(): HTMLElement | null {
-  const candidates = document.querySelectorAll<HTMLElement>(
-    '[class*="SidesheetBody"], [class*="SidesheetContent"], [role="dialog"], [aria-modal="true"]',
-  );
-  for (const el of candidates) {
-    if (ORDER_HEADING.test(el.innerText)) return el;
+/** Uber Eats' drawer has no dialog role: climb from the "Order D2D46" heading to the fixed panel that holds it. */
+function panelAroundHeading(heading: RegExp): HTMLElement | null {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = (node.textContent ?? '').trim();
+    if (text.length > 24 || !heading.test(`\n${text}\n`)) continue;
+    for (let el = node.parentElement; el && el !== document.body; el = el.parentElement) {
+      const pos = getComputedStyle(el).position;
+      if ((pos === 'fixed' || pos === 'absolute') && el.getBoundingClientRect().height > 300) return el;
+    }
   }
-  return ORDER_HEADING.test(document.body.innerText) ? document.body : null;
+  return null;
 }
 
-/** Best guess at the open panel on any DoorDash page, for pages the order parser does not understand. */
+/** The order side sheet (or the whole page when the order is shown full-screen). */
+export function findOrderRoot(platform: Platform = 'doordash'): HTMLElement | null {
+  const heading = ORDER_HEADINGS[platform];
+  for (const el of document.querySelectorAll<HTMLElement>(PANELS)) {
+    if (heading.test(el.innerText)) return el;
+  }
+  if (platform !== 'doordash') {
+    const panel = panelAroundHeading(heading);
+    if (panel) return panel;
+  }
+  return heading.test(document.body.innerText) ? document.body : null;
+}
+
+/** Best guess at the open panel on any order page, for pages the order parser does not understand. */
 export function genericRoot(): HTMLElement {
-  const candidates = [
-    ...document.querySelectorAll<HTMLElement>(
-      '[role="dialog"], [aria-modal="true"], [class*="SidesheetBody"], [class*="SidesheetContent"], [class*="drawer" i]',
-    ),
-  ].filter((el) => el.getBoundingClientRect().height > 140);
+  const candidates = [...document.querySelectorAll<HTMLElement>(`${PANELS}, [class*="drawer" i]`)].filter(
+    (el) => el.getBoundingClientRect().height > 140,
+  );
   return candidates.find((el) => el.scrollHeight > el.clientHeight + 20) ?? candidates.at(-1) ?? document.documentElement;
 }
 
-export const captureRoot = (): HTMLElement => findOrderRoot() ?? genericRoot();
+export const captureRoot = (platform: Platform = 'doordash'): HTMLElement => findOrderRoot(platform) ?? genericRoot();
 
 export function viewport(): Viewport {
   return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
@@ -47,8 +72,8 @@ function textRect(node: Text): DOMRect {
 }
 
 /** The text's small parent rows, so avatars next to a name are covered too. */
-function rowRect(node: Text, root: HTMLElement): DOMRect | null {
-  const start = node.parentElement;
+function rowRect(node: Node, root: HTMLElement): DOMRect | null {
+  const start = node instanceof HTMLElement ? node : node.parentElement;
   if (!start) return null;
   let target: HTMLElement = start;
   for (let i = 0; i < 2; i++) {
@@ -66,14 +91,71 @@ const hits = (re: RegExp, text: string): boolean => {
   return re.test(text);
 };
 
+// ---- pictures: customer photos are evidence; faces and avatars are personal details ----
+
+interface Picture {
+  el: HTMLElement;
+  rect: DOMRect;
+}
+
+function isRound(el: HTMLElement, rect: DOMRect): boolean {
+  for (let e: HTMLElement | null = el, i = 0; e && i < 3; e = e.parentElement, i++) {
+    const radius = getComputedStyle(e).borderTopLeftRadius;
+    const px = radius.endsWith('%') ? (parseFloat(radius) / 100) * rect.width : parseFloat(radius);
+    if (px >= rect.width * 0.4) return true;
+  }
+  return false;
+}
+
+/** Images and background images inside the order panel that are big enough to be a picture rather than an icon. */
+function pictures(root: HTMLElement): Picture[] {
+  const out: Picture[] = [];
+  for (const el of root.querySelectorAll<HTMLElement>('img, [role="img"], *')) {
+    const isImg = el instanceof HTMLImageElement || el.getAttribute('role') === 'img';
+    if (!isImg && !getComputedStyle(el).backgroundImage.startsWith('url(')) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 20 || rect.height < 20) continue;
+    out.push({ el, rect });
+  }
+  return out;
+}
+
+/** A photo the customer uploaded: a large picture, or a picture next to words like "photo" or "feedback". Never a face. */
+function isCustomerPhoto(p: Picture): boolean {
+  if (p.el.closest(MASKED)) return false;
+  if (p.rect.width < 48 || p.rect.height < 48 || isRound(p.el, p.rect)) return false;
+  if (p.rect.width >= 120 && p.rect.height >= 120) return true;
+  for (let e = p.el.parentElement, i = 0; e && i < 4; e = e.parentElement, i++) {
+    const text = e.innerText ?? '';
+    if (text.length < 600 && PHOTO_CONTEXT.test(text)) return true;
+  }
+  return false;
+}
+
+/** Customer photos on the order, in page order. */
+export function customerPhotos(root: HTMLElement): HTMLElement[] {
+  return pictures(root)
+    .filter(isCustomerPhoto)
+    .slice(0, MAX_PHOTOS)
+    .map((p) => p.el);
+}
+
+/** Pictures of people: courier faces and avatars. Small pictures that are not customer photos are hidden too, to be safe. */
+function personPictures(root: HTMLElement): DOMRect[] {
+  return pictures(root)
+    .filter((p) => !isCustomerPhoto(p) && (isRound(p.el, p.rect) || (p.rect.width <= 96 && p.rect.height <= 96)))
+    .map((p) => p.rect);
+}
+
 /**
- * Regions to black out in a screenshot of the current scroll position. Three independent signals are combined:
- * known personal names, the blocks under the Customer / Dasher labels (which need no parsing), and emails or phone numbers.
+ * Regions to black out in a screenshot of the current scroll position. Independent signals are combined:
+ * known personal names, the blocks under the Customer / Dasher labels (which need no parsing), fields the platform
+ * itself marks as private, pictures of people, and emails or phone numbers.
  *
  * Returns null (fail closed) when personal details cannot be located with confidence, and no screenshot is taken:
- * a name the parser found is missing from the page, or the page has no Customer / Dasher block and no other trace of one.
+ * a name the parser found is missing from the page, or the page has no trace of where the details are.
  */
-export function redactionRects(root: HTMLElement, names: string[]): Rect[] | null {
+export function redactionRects(root: HTMLElement, names: string[], platform: Platform = 'doordash'): Rect[] | null {
   const vp = viewport();
   const rects: Rect[] = [];
   const found = new Set<string>();
@@ -114,9 +196,28 @@ export function redactionRects(root: HTMLElement, names: string[]): Rect[] | nul
     }
   }
 
+  let masked = 0;
+  for (const el of root.querySelectorAll<HTMLElement>(MASKED)) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    rects.push(toRect(rowRect(el, root) ?? r));
+    masked++;
+  }
+  for (const r of personPictures(root)) rects.push(toRect(r, 2));
+
   if (names.some((n) => !found.has(n))) return null;
-  if (traces === 0) return null;
+  // Uber Eats has no Customer label to anchor on, so it needs a name or a platform-marked field before anything is captured.
+  if (platform !== 'doordash' && names.length === 0 && masked === 0) return null;
+  if (traces + masked === 0) return null;
   return rects.filter((r) => visible(r, vp));
+}
+
+/** Text the platform marks as private, so it can be removed from page text as well as from pixels. */
+export function maskedTexts(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>(MASKED)]
+    .flatMap((el) => el.innerText.split('\n'))
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && t.length <= 60);
 }
 
 function scrolls(el: HTMLElement, minHeight: number): boolean {
@@ -155,4 +256,13 @@ export function scrollMetrics(el: HTMLElement): { scrollTop: number; scrollHeigh
 export function setScrollTop(el: HTMLElement, top: number): void {
   if (isPage(el)) window.scrollTo({ top, behavior: 'instant' });
   else el.scrollTo({ top, behavior: 'instant' });
+}
+
+/** The part of `a` inside `b`, or null when they do not overlap. */
+export function intersect(a: Rect, b: Rect): Rect | null {
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const w = Math.min(a.x + a.w, b.x + b.w) - x;
+  const h = Math.min(a.y + a.h, b.y + b.h) - y;
+  return w > 0 && h > 0 ? { x, y, w, h } : null;
 }

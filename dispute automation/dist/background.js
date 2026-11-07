@@ -8,7 +8,7 @@
   var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
   var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
   var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$/i;
+  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$/i;
   var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
   var MONTHS = {
     january: 0,
@@ -186,6 +186,7 @@
       }
     }
     const snapshot = {
+      platform: "doordash",
       orderId,
       placedAtText,
       placedAt: placedAtText ? parsePlacedAt(placedAtText) : null,
@@ -213,14 +214,17 @@
 
   // src/shared/rules.ts
   var DISPUTE_WINDOW_DAYS = 14;
+  var WINDOW_DAYS = { doordash: DISPUTE_WINDOW_DAYS };
   var DECIDED = /^(approved|denied|rejected|declined)$/;
   var DAY_MS = 864e5;
   function assessRules(snapshot, now = /* @__PURE__ */ new Date()) {
     let deadlineIso = null;
     let daysLeft = null;
     let expired = false;
-    if (snapshot.placedAt) {
-      const deadline = new Date(new Date(snapshot.placedAt).getTime() + DISPUTE_WINDOW_DAYS * DAY_MS);
+    const platform = snapshot.platform ?? "doordash";
+    const window = WINDOW_DAYS[platform];
+    if (snapshot.placedAt && window) {
+      const deadline = new Date(new Date(snapshot.placedAt).getTime() + window * DAY_MS);
       deadlineIso = deadline.toISOString();
       const remaining = deadline.getTime() - now.getTime();
       daysLeft = Math.floor(remaining / DAY_MS);
@@ -233,7 +237,11 @@
     const errorTotal = openErrorCharges.reduce((sum, c) => sum + Math.abs(c.amount ?? 0), 0);
     const reasons = openErrorCharges.map((c) => c.reason ?? "").join(" ");
     let faultHint = null;
-    if (/missing|incorrect|wrong/i.test(reasons)) {
+    if (platform !== "doordash") {
+      if (/missing|incorrect|wrong|customi[sz]ation/i.test(reasons)) {
+        faultHint = "Wrong or missing items are usually charged to the restaurant. A dispute needs proof the order was made as ordered.";
+      }
+    } else if (/missing|incorrect|wrong/i.test(reasons)) {
       faultHint = "Missing or incorrect items are charged to the merchant by default (Marketplace addendum s8). A dispute needs proof the item was made and handed off.";
     } else if (/late|never|not delivered|damaged|spilled|cold/i.test(reasons)) {
       faultHint = "Delivery-related reasons may be DoorDash's cost rather than the merchant's. Check the Dasher pick-up and drop-off times.";
@@ -301,14 +309,17 @@
       context = await askPage(tabId, { type: "GET_CAPTURE_CONTEXT" });
     } catch {
       const host = tab.url ? ` (${new URL(tab.url).hostname})` : "";
-      return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the DoorDash tab, then try again.`);
+      return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the order tab, then try again.`);
     }
+    const platform = payload?.platform ?? context?.platform ?? "doordash";
     const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
-    const snapshot = payload?.snapshot ?? parseOrder(`Order: ${orderId}`).snapshot;
+    const snapshot = payload?.snapshot ?? { ...parseOrder(`Order: ${orderId}`).snapshot, platform };
     const redactedText = payload?.redactedText ?? context?.safeText ?? "";
     const { image, note } = await takeRedactedScreenshot(tab);
+    const photos = image && context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
     const record = {
       id: `${orderId}-${Date.now().toString(36)}`,
+      platform,
       orderId,
       storeId: context?.storeId ?? null,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -317,7 +328,8 @@
       snapshot,
       redactedText,
       image,
-      imageNote: note,
+      imageNote: [note, context?.hint].filter(Boolean).join(" ") || null,
+      photos,
       facts: assessRules(snapshot),
       assessment: null,
       status: "new"
@@ -333,7 +345,7 @@
   var CANNOT_HIDE = "personal details could not be located on the page, so nothing was captured. The assistant will work from the redacted page text.";
   async function takeRedactedScreenshot(tab) {
     if (!tab.active || tab.id === void 0 || tab.windowId === void 0) {
-      return { image: null, note: "No screenshot: the DoorDash tab is not the active tab. Switch to it and capture again." };
+      return { image: null, note: "No screenshot: the order tab is not the active tab. Switch to it and capture again." };
     }
     const tabId = tab.id;
     const ask = (top) => askPage(tabId, { type: "SCROLL_FRAME", top });
@@ -376,6 +388,47 @@
       if (start) await ask(start.scrollTop).catch(() => {
       });
     }
+  }
+  async function takeCustomerPhotos(tab, count) {
+    if (tab.id === void 0 || tab.windowId === void 0) return [];
+    const tabId = tab.id;
+    const photos = [];
+    let start = null;
+    try {
+      start = await askPage(tabId, { type: "SCROLL_FRAME", top: null });
+      for (let i = 0; i < Math.min(count, 3); i++) {
+        const before = await askPage(tabId, { type: "PHOTO_FRAME", index: i, scroll: true });
+        if (!before?.rects) continue;
+        await sleep(CAPTURE_GAP_MS);
+        const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+        const after = await askPage(tabId, { type: "PHOTO_FRAME", index: i, scroll: false });
+        if (!after?.rects || !rectsMatch([before.rect], [after.rect]) || !rectsMatch(before.rects, after.rects)) continue;
+        photos.push(await cropPhoto(raw, before));
+      }
+    } catch (err) {
+      console.warn("customer photos skipped", err);
+    } finally {
+      if (start) await askPage(tabId, { type: "SCROLL_FRAME", top: start.scrollTop }).catch(() => {
+      });
+    }
+    return photos;
+  }
+  async function cropPhoto(rawDataUrl, f) {
+    const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());
+    const scale = bitmap.width / f.viewport.innerWidth;
+    const screen = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const sctx = screen.getContext("2d");
+    sctx.drawImage(bitmap, 0, 0);
+    sctx.fillStyle = "#111111";
+    for (const r of f.rects ?? []) sctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
+    const sx = Math.max(0, Math.round(f.rect.x * scale));
+    const sy = Math.max(0, Math.round(f.rect.y * scale));
+    const sw = Math.min(Math.round(f.rect.w * scale), bitmap.width - sx);
+    const sh = Math.min(Math.round(f.rect.h * scale), bitmap.height - sy);
+    const k = Math.min(1, 1600 / sw);
+    const out = new OffscreenCanvas(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
+    out.getContext("2d").drawImage(screen, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return blobToDataUrl(await out.convertToBlob({ type: "image/jpeg", quality: 0.85 }));
   }
   function rectsMatch(a, b) {
     if (a.length !== b.length) return false;

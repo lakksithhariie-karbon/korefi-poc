@@ -8,7 +8,7 @@
   var REASON = /^(missing|incorrect|wrong|late|never|not delivered|damaged|spilled|quality|cold|order )/i;
   var TIME = /^\d{1,2}:\d{2}\s*[ap]m$/i;
   var QUOTED = /^\(Quoted:\s*(.+)\)$/i;
-  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$/i;
+  var PROFILE_NOISE = /years? on DoorDash|orders? from your store|^new to DoorDash$|^(new|returning|repeat) customer$|orders? delivered$/i;
   var UI_NOISE = /^(top customer|learn more about top customers|report|rate dasher)$/i;
   var MONTHS = {
     january: 0,
@@ -186,6 +186,7 @@
       }
     }
     const snapshot = {
+      platform: "doordash",
       orderId,
       placedAtText,
       placedAt: placedAtText ? parsePlacedAt(placedAtText) : null,
@@ -216,13 +217,191 @@
   function redactText(text, names) {
     let out = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).filter((l) => l.length > 1 && !UI_NOISE.test(l) && !PROFILE_NOISE.test(l)).join("\n");
     for (const n of [...names].sort((a, b) => b.length - a.length)) {
-      out = out.replace(new RegExp(escapeRegExp(n), "g"), "[PERSON]");
+      out = out.replace(new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(n)}(?![A-Za-z0-9])`, "g"), "[PERSON]");
     }
     return out;
   }
 
+  // src/shared/extract-ubereats.ts
+  var MONEY = /^([-−–+]?)\s*(?:US|CA|A)?\$\s?([\d,]+(?:\.\d{1,2})?)$/;
+  var ORDER = /^Order\s+([A-Z0-9]{4,16})$/;
+  var DATE = /^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})$/;
+  var TIME24 = /^\d{1,2}:\d{2}$/;
+  var QTY2 = /^\d{1,3}$/;
+  var OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
+  var FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
+  var CUSTOMER_TAG = /^(new|returning|repeat|loyal|top|frequent)\s+customer$|customer since/i;
+  var COURIER_NOISE = /^\d{1,3}%$|orders? delivered|^Rate$|^(courier|delivery person|driver)$/i;
+  var STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
+  var MONTHS2 = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    sept: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11
+  };
+  function parseMoneyAny(s) {
+    const m = s.trim().match(MONEY);
+    if (!m) return null;
+    const v = parseFloat(m[2].replace(/,/g, ""));
+    return m[1] && m[1] !== "+" ? -v : v;
+  }
+  var isMoney = (l) => MONEY.test(l.trim());
+  function uberPlacedAt(date, time) {
+    const m = date?.match(DATE);
+    if (!m) return null;
+    const month = MONTHS2[m[2].slice(0, 4).toLowerCase()] ?? MONTHS2[m[2].slice(0, 3).toLowerCase()];
+    if (month === void 0) return null;
+    const pad = (n) => String(n).padStart(2, "0");
+    const [h, min] = (time ?? "00:00").split(":").map((x) => parseInt(x, 10));
+    return `${m[3]}-${pad(month + 1)}-${pad(parseInt(m[1], 10))}T${pad(h)}:${pad(min)}`;
+  }
+  function parseUberOrder(rawText) {
+    const lines = rawText.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+    const find = (pred, from = 0, to = lines.length) => {
+      for (let i2 = Math.max(from, 0); i2 < to; i2++) if (pred(lines[i2])) return i2;
+      return -1;
+    };
+    const names = [];
+    const iOrder = find((l) => ORDER.test(l));
+    const orderId = iOrder >= 0 ? lines[iOrder].match(ORDER)[1] : "";
+    for (const l of lines.slice(Math.max(0, iOrder - 4), Math.max(iOrder, 0))) {
+      if (CUSTOMER_TAG.test(l) || l.length > 40) continue;
+      names.push(l);
+    }
+    const iDelivery = find((l) => l === "Delivery details");
+    const iDetails = find((l) => l === "Order details");
+    const headEnd = iDelivery >= 0 ? iDelivery : iDetails >= 0 ? iDetails : lines.length;
+    const head = lines.slice(iOrder + 1, headEnd);
+    const dateLine = head.find((l) => DATE.test(l)) ?? null;
+    const shop = head.find((l) => l !== dateLine && /\(.+\)|avenue|street|road|blvd|ave\b|st\b/i.test(l) && !/deducted|reported|dispute/i.test(l)) ?? null;
+    const bannerStart = head.findIndex((l) => l !== dateLine && l !== shop && !DATE.test(l));
+    const banner = bannerStart >= 0 ? head.slice(bannerStart).filter((l) => l !== "Dispute" && l !== shop) : [];
+    const deducted = banner.map((l) => l.match(/\$([\d,]+(?:\.\d{1,2})?)\s+deducted/i)).find(Boolean);
+    const issueHeadline = banner.find((l) => FLAG.test(l) && l.length < 60) ?? null;
+    const disputeOffered = head.includes("Dispute");
+    const statusLine = lines.find((l) => STATUS.test(l));
+    if (iDelivery >= 0) {
+      for (const l of lines.slice(iDelivery + 1, iDetails >= 0 ? iDetails : iDelivery + 8)) {
+        if (COURIER_NOISE.test(l) || l.length < 2) continue;
+        names.push(l);
+        break;
+      }
+    }
+    const timeline = [];
+    let i = iDetails >= 0 ? iDetails + 1 : lines.length;
+    while (i + 1 < lines.length && TIME24.test(lines[i]) && !TIME24.test(lines[i + 1])) {
+      timeline.push({ time: lines[i], event: lines[i + 1] });
+      i += 2;
+    }
+    const iMoney = find((l) => /^Sales\b/i.test(l), i);
+    const end = iMoney >= 0 ? iMoney : lines.length;
+    const items = [];
+    let item = null;
+    let header = null;
+    let lastOption = null;
+    for (let j = i; j < end; j++) {
+      const l = lines[j];
+      if (OPTION_HEADER.test(l)) {
+        header = l;
+        continue;
+      }
+      if (/^Customer feedback$/i.test(l)) {
+        const said = [];
+        for (j = j + 1; j < end && !/^View (less|more)$/i.test(lines[j]) && !OPTION_HEADER.test(lines[j]) && !QTY2.test(lines[j]); j++) said.push(lines[j]);
+        if (/^View (less|more)$/i.test(lines[j] ?? "")) j++;
+        j--;
+        if (item) item.feedback = said.join(" ").trim() || null;
+        continue;
+      }
+      if (/^View (less|more)$/i.test(l)) continue;
+      if (QTY2.test(l) && j + 1 < end) {
+        const name = lines[j + 1];
+        if (header && item) {
+          lastOption = `${header.replace(OPTION_HEADER, "").trim()}: ${name}`;
+          item.options.push(lastOption);
+          header = null;
+        } else {
+          item = { qty: parseInt(l, 10), name, options: [], price: null, flags: [], flaggedOptions: [], feedback: null };
+          items.push(item);
+          lastOption = null;
+        }
+        j++;
+        continue;
+      }
+      if (!item) continue;
+      if (isMoney(l)) {
+        if (item.price === null && !lastOption) item.price = parseMoneyAny(l);
+        continue;
+      }
+      if (FLAG.test(l) && l.length < 60) {
+        if (lastOption) item.flaggedOptions.push(`${lastOption} (${l})`);
+        else item.flags.push(l);
+      }
+    }
+    const value = (label) => {
+      const k = find((l) => label.test(l), end);
+      if (k < 0) return null;
+      const same = lines[k].match(/((?:[-−–+]\s*)?(?:US|CA|A)?\$\s?[\d,]+(?:\.\d{1,2})?)$/);
+      if (same && lines[k] !== same[1]) return parseMoneyAny(same[1].replace(/\s+/g, ""));
+      for (let n = k + 1; n <= k + 3 && n < lines.length; n++) if (isMoney(lines[n])) return parseMoneyAny(lines[n]);
+      return null;
+    };
+    const chargeback = value(/^Chargeback amount/i);
+    const deductedAmount = deducted ? -parseFloat(deducted[1].replace(/,/g, "")) : null;
+    const errorTotal = chargeback ?? deductedAmount;
+    const flagged = items.filter((x) => x.flags.length || x.flaggedOptions.length);
+    const status = statusLine ? statusLine.replace(/^Dispute /i, "").toLowerCase() : disputeOffered ? "available" : null;
+    const errorCharges = (flagged.length ? flagged : issueHeadline ? [null] : []).map((x) => ({
+      item: x?.name ?? "",
+      options: x?.flaggedOptions ?? [],
+      reason: x?.flags[0] ?? (x?.flaggedOptions.length ? "Customisation reported wrong" : issueHeadline),
+      disputeStatus: status,
+      amount: flagged.length <= 1 ? errorTotal : null,
+      customerComment: x?.feedback ?? items.find((y) => y.feedback)?.feedback ?? null
+    }));
+    const step = (re) => timeline.find((t) => re.test(t.event))?.time ?? null;
+    const snapshot = {
+      platform: "ubereats",
+      orderId,
+      placedAtText: dateLine ? [dateLine, timeline[0]?.time].filter(Boolean).join(" ") : null,
+      placedAt: uberPlacedAt(dateLine, timeline[0]?.time ?? null),
+      status: step(/delivered/i) ? "Delivered" : timeline.at(-1)?.event ?? null,
+      disputeStatus: status,
+      notice: banner.join(" ").slice(0, 600) || null,
+      channel: "Uber Eats",
+      fulfillment: timeline.some((t) => /courier|delivered to customer/i.test(t.event)) ? "Uber delivery" : null,
+      pickedUp: { actual: step(/courier departs|picked up/i), quoted: null },
+      droppedOff: { actual: step(/delivered/i), quoted: null },
+      items: items.map(({ qty, name, options, price }) => ({ qty, name, options, price })),
+      subtotal: value(/^Sales\b/i),
+      tax: value(/^Tax\b/i),
+      commissionPct: null,
+      commission: value(/^Marketplace Fee/i),
+      orderTotal: null,
+      errorCharges,
+      errorChargeTotal: errorTotal,
+      errorCredit: null,
+      estimatedPayout: value(/^Net payout/i),
+      transactions: [],
+      timeline,
+      shop
+    };
+    return { snapshot, names: [...new Set(names.filter((n) => n.length >= 2))] };
+  }
+
   // src/shared/ids.ts
   var STORE_PARAMS = ["store_id", "storeId", "storeid", "store", "merchant_store_id"];
+  var UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+  var UBER_STORE_PARAMS = ["restaurantUUID", "restaurant_uuid", "storeUUID", "store_uuid", "shopUUID", "restaurantId"];
   var ORDER_PARAMS = ["order_id", "orderId", "orderid", "order"];
   function params(url) {
     try {
@@ -235,7 +414,17 @@
       return new URLSearchParams();
     }
   }
-  function findStoreId(url, text) {
+  function findStoreId(url, text, platform2 = "doordash") {
+    if (platform2 === "ubereats") {
+      const inPath = url.match(new RegExp(`/(?:stores?|restaurants?|shops?|home)/(${UUID})(?:[/?#]|$)`, "i"))?.[1];
+      if (inPath) return inPath.toLowerCase();
+      const q2 = params(url);
+      for (const key of UBER_STORE_PARAMS) {
+        const v = q2.get(key);
+        if (v && new RegExp(`^${UUID}$`, "i").test(v)) return v.toLowerCase();
+      }
+      return null;
+    }
     const path = url.match(/\/stores?\/(\d{3,32})(?:[/?#]|$)/i)?.[1];
     if (path) return path;
     const q = params(url);
@@ -248,12 +437,34 @@
   function findOrderId(url, text) {
     const fromText = text.match(/(?:^|\n)\s*Order:\s*([A-Z0-9]{4,16})\b/)?.[1];
     if (fromText) return fromText;
+    const uber = text.match(/(?:^|\n)\s*Order\s+([A-Z0-9]{4,16})\s*(?:\n|$)/)?.[1];
+    if (uber) return uber;
     const q = params(url);
     for (const key of ORDER_PARAMS) {
       const v = q.get(key);
       if (v && /^[A-Z0-9-]{4,24}$/i.test(v)) return v;
     }
     return url.match(/\/orders?\/([A-Z0-9]{6,16})(?:[/?#]|$)/i)?.[1] ?? null;
+  }
+
+  // src/shared/platform.ts
+  function platformFromUrl(url) {
+    let host = "";
+    try {
+      host = new URL(url).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+    if (host === "doordash.com" || host.endsWith(".doordash.com")) return "doordash";
+    if (host === "ubereats.com" || host.endsWith(".ubereats.com") || host === "uber.com" || host.endsWith(".uber.com")) return "ubereats";
+    if (host === "grubhub.com" || host.endsWith(".grubhub.com")) return "grubhub";
+    return null;
+  }
+  function detectPlatform(url, doc) {
+    const fromUrl = platformFromUrl(url);
+    if (fromUrl) return fromUrl;
+    if (doc.querySelector("[data-baseweb]") || /Uber Eats/i.test(doc.title)) return "ubereats";
+    return "doordash";
   }
 
   // src/shared/redact.ts
@@ -301,27 +512,50 @@
   }
 
   // src/content/dom.ts
-  var ORDER_HEADING = /(^|\n)Order:\s*[A-Z0-9]{4,}/;
-  var PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers/i;
+  var ORDER_HEADINGS = {
+    doordash: /(^|\n)Order:\s*[A-Z0-9]{4,}/,
+    // "Order D2D46" on a line of its own; "Order details" is lower case and never matches.
+    ubereats: /(^|\n)Order\s+[A-Z0-9]{4,16}\s*(\n|$)/,
+    grubhub: /(^|\n)Order\s*#?\s*[A-Z0-9-]{4,}/
+  };
+  var PROFILE_TEXT = /years? on DoorDash|orders? from your store|^\s*Top customer\s*$|Learn more about top customers|^\s*(New|Returning|Repeat) customer\s*$|orders? delivered\s*$/i;
   var FALLBACK_BLOCK_HEIGHT = 170;
-  function findOrderRoot() {
-    const candidates = document.querySelectorAll(
-      '[class*="SidesheetBody"], [class*="SidesheetContent"], [role="dialog"], [aria-modal="true"]'
-    );
-    for (const el of candidates) {
-      if (ORDER_HEADING.test(el.innerText)) return el;
+  var MASKED = ".fs-mask, [data-fs-mask], [data-private]";
+  var PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-baseweb="drawer"], [role="dialog"], [aria-modal="true"]';
+  var PHOTO_CONTEXT = /photo|picture|image|feedback|comment|evidence/i;
+  var MAX_PHOTOS = 3;
+  function panelAroundHeading(heading) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = (node.textContent ?? "").trim();
+      if (text.length > 24 || !heading.test(`
+${text}
+`)) continue;
+      for (let el = node.parentElement; el && el !== document.body; el = el.parentElement) {
+        const pos = getComputedStyle(el).position;
+        if ((pos === "fixed" || pos === "absolute") && el.getBoundingClientRect().height > 300) return el;
+      }
     }
-    return ORDER_HEADING.test(document.body.innerText) ? document.body : null;
+    return null;
+  }
+  function findOrderRoot(platform2 = "doordash") {
+    const heading = ORDER_HEADINGS[platform2];
+    for (const el of document.querySelectorAll(PANELS)) {
+      if (heading.test(el.innerText)) return el;
+    }
+    if (platform2 !== "doordash") {
+      const panel = panelAroundHeading(heading);
+      if (panel) return panel;
+    }
+    return heading.test(document.body.innerText) ? document.body : null;
   }
   function genericRoot() {
-    const candidates = [
-      ...document.querySelectorAll(
-        '[role="dialog"], [aria-modal="true"], [class*="SidesheetBody"], [class*="SidesheetContent"], [class*="drawer" i]'
-      )
-    ].filter((el) => el.getBoundingClientRect().height > 140);
+    const candidates = [...document.querySelectorAll(`${PANELS}, [class*="drawer" i]`)].filter(
+      (el) => el.getBoundingClientRect().height > 140
+    );
     return candidates.find((el) => el.scrollHeight > el.clientHeight + 20) ?? candidates.at(-1) ?? document.documentElement;
   }
-  var captureRoot = () => findOrderRoot() ?? genericRoot();
+  var captureRoot = (platform2 = "doordash") => findOrderRoot(platform2) ?? genericRoot();
   function viewport() {
     return { innerWidth: window.innerWidth, innerHeight: window.innerHeight };
   }
@@ -337,7 +571,7 @@
     return range.getBoundingClientRect();
   }
   function rowRect(node, root) {
-    const start = node.parentElement;
+    const start = node instanceof HTMLElement ? node : node.parentElement;
     if (!start) return null;
     let target = start;
     for (let i = 0; i < 2; i++) {
@@ -353,7 +587,42 @@
     re.lastIndex = 0;
     return re.test(text);
   };
-  function redactionRects(root, names) {
+  function isRound(el, rect) {
+    for (let e = el, i = 0; e && i < 3; e = e.parentElement, i++) {
+      const radius = getComputedStyle(e).borderTopLeftRadius;
+      const px = radius.endsWith("%") ? parseFloat(radius) / 100 * rect.width : parseFloat(radius);
+      if (px >= rect.width * 0.4) return true;
+    }
+    return false;
+  }
+  function pictures(root) {
+    const out = [];
+    for (const el of root.querySelectorAll('img, [role="img"], *')) {
+      const isImg = el instanceof HTMLImageElement || el.getAttribute("role") === "img";
+      if (!isImg && !getComputedStyle(el).backgroundImage.startsWith("url(")) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 20 || rect.height < 20) continue;
+      out.push({ el, rect });
+    }
+    return out;
+  }
+  function isCustomerPhoto(p) {
+    if (p.el.closest(MASKED)) return false;
+    if (p.rect.width < 48 || p.rect.height < 48 || isRound(p.el, p.rect)) return false;
+    if (p.rect.width >= 120 && p.rect.height >= 120) return true;
+    for (let e = p.el.parentElement, i = 0; e && i < 4; e = e.parentElement, i++) {
+      const text = e.innerText ?? "";
+      if (text.length < 600 && PHOTO_CONTEXT.test(text)) return true;
+    }
+    return false;
+  }
+  function customerPhotos(root) {
+    return pictures(root).filter(isCustomerPhoto).slice(0, MAX_PHOTOS).map((p) => p.el);
+  }
+  function personPictures(root) {
+    return pictures(root).filter((p) => !isCustomerPhoto(p) && (isRound(p.el, p.rect) || p.rect.width <= 96 && p.rect.height <= 96)).map((p) => p.rect);
+  }
+  function redactionRects(root, names, platform2 = "doordash") {
     const vp = viewport();
     const rects = [];
     const found = /* @__PURE__ */ new Set();
@@ -390,9 +659,21 @@
         traces++;
       }
     }
+    let masked = 0;
+    for (const el of root.querySelectorAll(MASKED)) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      rects.push(toRect(rowRect(el, root) ?? r));
+      masked++;
+    }
+    for (const r of personPictures(root)) rects.push(toRect(r, 2));
     if (names.some((n) => !found.has(n))) return null;
-    if (traces === 0) return null;
+    if (platform2 !== "doordash" && names.length === 0 && masked === 0) return null;
+    if (traces + masked === 0) return null;
     return rects.filter((r) => visible(r, vp));
+  }
+  function maskedTexts(root) {
+    return [...root.querySelectorAll(MASKED)].flatMap((el) => el.innerText.split("\n")).map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 60);
   }
   function scrolls(el, minHeight) {
     return /(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY) && el.clientHeight >= minHeight && el.scrollHeight > el.clientHeight + 4;
@@ -425,36 +706,76 @@
     if (isPage(el)) window.scrollTo({ top, behavior: "instant" });
     else el.scrollTo({ top, behavior: "instant" });
   }
+  function intersect(a, b) {
+    const x = Math.max(a.x, b.x);
+    const y = Math.max(a.y, b.y);
+    const w = Math.min(a.x + a.w, b.x + b.w) - x;
+    const h = Math.min(a.y + a.h, b.y + b.h) - y;
+    return w > 0 && h > 0 ? { x, y, w, h } : null;
+  }
 
   // src/content/index.ts
+  var platform = () => detectPlatform(location.href, document);
+  var parse = (text, on) => on === "ubereats" ? parseUberOrder(text) : parseOrder(text);
+  function personalNames(root, on) {
+    const { names } = parse(root.innerText, on);
+    return [.../* @__PURE__ */ new Set([...names, ...maskedTexts(root)])];
+  }
   function buildPayload() {
-    const root = findOrderRoot();
+    const on = platform();
+    const root = findOrderRoot(on);
     if (!root) return null;
     const text = root.innerText;
-    const { snapshot, names } = parseOrder(text);
+    const { snapshot } = parse(text, on);
     if (!snapshot.orderId) return null;
-    return { url: location.href, snapshot, redactedText: scrubText(redactText(text, names)) };
+    return { platform: on, url: location.href, snapshot, redactedText: scrubText(redactText(text, personalNames(root, on))) };
   }
   function buildContext() {
-    const root = captureRoot();
+    const on = platform();
+    const root = captureRoot(on);
     const text = root.innerText.slice(0, 2e4);
+    const collapsed = /Customer feedback/i.test(text) && /(^|\n)View more(\n|$)/i.test(text);
     return {
+      platform: on,
       orderId: findOrderId(location.href, text),
-      storeId: findStoreId(location.href, document.body.innerText.slice(0, 2e4)),
+      storeId: findStoreId(location.href, document.body.innerText.slice(0, 2e4), on),
       title: document.title,
       url: location.href,
-      safeText: scrubText(text).slice(0, 9e3)
+      safeText: scrubText(redactText(text, personalNames(root, on))).slice(0, 9e3),
+      photoCount: customerPhotos(root).length,
+      hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null
     };
   }
+  var settle = (ms = 350) => new Promise((r) => setTimeout(r, ms));
   async function frame(top) {
-    const root = captureRoot();
+    const on = platform();
+    const root = captureRoot(on);
     const scroller = findScroller(root);
     if (top !== null) {
       setScrollTop(scroller, top);
-      await new Promise((r) => setTimeout(r, 350));
+      await settle();
     }
-    const { names } = parseOrder(root.innerText);
-    return { ...scrollMetrics(scroller), rects: redactionRects(root, names), viewport: viewport() };
+    return { ...scrollMetrics(scroller), rects: redactionRects(root, personalNames(root, on), on), viewport: viewport() };
+  }
+  async function photoFrame(index, scroll) {
+    const on = platform();
+    const root = captureRoot(on);
+    const photo = customerPhotos(root)[index];
+    if (!photo) return null;
+    const scroller = findScroller(root);
+    const { scrollTop, region } = scrollMetrics(scroller);
+    if (scroll) {
+      setScrollTop(scroller, scrollTop + photo.getBoundingClientRect().top - region.y - 16);
+      await settle();
+      for (let i = 0; i < 6 && photo instanceof HTMLImageElement && !photo.complete; i++) await settle(250);
+    }
+    const vp = viewport();
+    const shown = intersect(
+      { x: photo.getBoundingClientRect().left, y: photo.getBoundingClientRect().top, w: photo.getBoundingClientRect().width, h: photo.getBoundingClientRect().height },
+      intersect(scrollMetrics(scroller).region, { x: 0, y: 0, w: vp.innerWidth, h: vp.innerHeight }) ?? { x: 0, y: 0, w: 0, h: 0 }
+    );
+    if (!shown) return null;
+    return { rect: shown, rects: redactionRects(root, personalNames(root, on), on), viewport: vp };
   }
   var flag = window;
   if (!flag.__korefiReader) {
@@ -466,6 +787,9 @@
         sendResponse(buildContext());
       } else if (msg.type === "SCROLL_FRAME") {
         void frame(msg.top).then(sendResponse, () => sendResponse(null));
+        return true;
+      } else if (msg.type === "PHOTO_FRAME") {
+        void photoFrame(msg.index, msg.scroll).then(sendResponse, () => sendResponse(null));
         return true;
       }
       return false;

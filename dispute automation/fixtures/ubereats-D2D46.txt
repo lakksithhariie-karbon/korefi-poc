@@ -1,0 +1,65 @@
+MG
+M.E. G
+New customer
+Order D2D46
+18 Oct 2026
+Odd One Out Tea (Pasadena) (14 South Fair Oaks Avenue)
+1 customisation wrong
+$0.95 deducted from net payout
+Customer reported 1 wrong item customisation received. If you believe this is an error, you can submit a dispute. Dispute access is available to authorised users only.
+Dispute
+Delivery details
+YOUWEI
+98%
+4938 orders delivered
+Rate
+Order details
+16:57
+Order placed by customer
+16:57
+Order accepted by POS integration
+16:57
+Order confirmed by shop
+17:19
+Courier departs
+17:28
+Order delivered to customer
+1
+Summer Night Black Milk Tea
+1 customisation wrong
+$8.94
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+No Ice
+(OPTIONAL) Change Sugar Level - Default Perfect Sugar (50%)
+1
+No Sugar (0%)
+(OPTIONAL) Add Topping
+1
+Jasmine Silk Boba (ICE ONLY)
+Customisation reported wrong
+Customer feedback
+It didn't have the jasmine silk boba and it barely even tastes like tea. Its oat milk with a splash of black tea which I did NOT order!
+View less
+(OPTIONAL) Milk Alternatives - Default Straus Organic Pure Milk
+1
+Califia Oat Milk
+$0.50
+1
+Banana Bread Matcha
+$9.99
+(OPTIONAL) Change Ice or Hot - Default Perfect Ice
+1
+Hot
+(OPTIONAL) Change Sugar - Default Perfect Sugar (50%)
+1
+Less Sugar (25%)
+Sales (excl. tax)
+US$18.93
+Chargeback amount
+Dispute
+-US$0.95
+Marketplace Fee
+-US$5.68
+Net payout
+US$12.30

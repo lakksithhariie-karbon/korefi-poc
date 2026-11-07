@@ -1,7 +1,7 @@
 import { parseOrder } from './shared/extract.ts';
 import { assessRules } from './shared/rules.ts';
 import { upsertCase } from './shared/storage.ts';
-import type { CaptureContext, CaseRecord, FramePayload, PagePayload, Rect, RuntimeMessage } from './shared/types.ts';
+import type { CaptureContext, CaseRecord, FramePayload, PagePayload, PhotoFrame, Rect, RuntimeMessage } from './shared/types.ts';
 
 // Clicking the icon opens the panel and, through activeTab, lets us read and screenshot this tab until it navigates away.
 chrome.action.onClicked.addListener((tab) => {
@@ -48,17 +48,21 @@ async function capture(tabId: number): Promise<void> {
     context = await askPage<CaptureContext | null>(tabId, { type: 'GET_CAPTURE_CONTEXT' });
   } catch {
     const host = tab.url ? ` (${new URL(tab.url).hostname})` : '';
-    return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the DoorDash tab, then try again.`);
+    return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the order tab, then try again.`);
   }
 
   // A page the parser does not understand is still worth investigating: use what the page revealed, without personal details.
+  const platform = payload?.platform ?? context?.platform ?? 'doordash';
   const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
-  const snapshot = payload?.snapshot ?? parseOrder(`Order: ${orderId}`).snapshot;
+  const snapshot = payload?.snapshot ?? { ...parseOrder(`Order: ${orderId}`).snapshot, platform };
   const redactedText = payload?.redactedText ?? context?.safeText ?? '';
 
   const { image, note } = await takeRedactedScreenshot(tab);
+  // Customer photos are only taken when the page screenshot could be redacted: the same checks apply to each photo.
+  const photos = image && context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
   const record: CaseRecord = {
     id: `${orderId}-${Date.now().toString(36)}`,
+    platform,
     orderId,
     storeId: context?.storeId ?? null,
     createdAt: new Date().toISOString(),
@@ -67,7 +71,8 @@ async function capture(tabId: number): Promise<void> {
     snapshot,
     redactedText,
     image,
-    imageNote: note,
+    imageNote: [note, context?.hint].filter(Boolean).join(' ') || null,
+    photos,
     facts: assessRules(snapshot),
     assessment: null,
     status: 'new',
@@ -94,7 +99,7 @@ const CANNOT_HIDE =
  */
 async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: string | null; note: string | null }> {
   if (!tab.active || tab.id === undefined || tab.windowId === undefined) {
-    return { image: null, note: 'No screenshot: the DoorDash tab is not the active tab. Switch to it and capture again.' };
+    return { image: null, note: 'No screenshot: the order tab is not the active tab. Switch to it and capture again.' };
   }
   const tabId = tab.id;
   const ask = (top: number | null) => askPage<FramePayload | null>(tabId, { type: 'SCROLL_FRAME', top });
@@ -140,6 +145,52 @@ async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: st
   } finally {
     if (start) await ask(start.scrollTop).catch(() => {});
   }
+}
+
+/**
+ * Each customer photo, scrolled into view and cropped from a screenshot at full resolution, with the same black-out
+ * boxes applied. A photo whose surroundings cannot be redacted, or that moves while capturing, is skipped.
+ */
+async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<string[]> {
+  if (tab.id === undefined || tab.windowId === undefined) return [];
+  const tabId = tab.id;
+  const photos: string[] = [];
+  let start: FramePayload | null = null;
+  try {
+    start = await askPage<FramePayload | null>(tabId, { type: 'SCROLL_FRAME', top: null });
+    for (let i = 0; i < Math.min(count, 3); i++) {
+      const before = await askPage<PhotoFrame | null>(tabId, { type: 'PHOTO_FRAME', index: i, scroll: true });
+      if (!before?.rects) continue;
+      await sleep(CAPTURE_GAP_MS);
+      const raw = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+      const after = await askPage<PhotoFrame | null>(tabId, { type: 'PHOTO_FRAME', index: i, scroll: false });
+      if (!after?.rects || !rectsMatch([before.rect], [after.rect]) || !rectsMatch(before.rects, after.rects)) continue;
+      photos.push(await cropPhoto(raw, before));
+    }
+  } catch (err) {
+    console.warn('customer photos skipped', err);
+  } finally {
+    if (start) await askPage(tabId, { type: 'SCROLL_FRAME', top: start.scrollTop }).catch(() => {});
+  }
+  return photos;
+}
+
+async function cropPhoto(rawDataUrl: string, f: PhotoFrame): Promise<string> {
+  const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());
+  const scale = bitmap.width / f.viewport.innerWidth;
+  const screen = new OffscreenCanvas(bitmap.width, bitmap.height);
+  const sctx = screen.getContext('2d')!;
+  sctx.drawImage(bitmap, 0, 0);
+  sctx.fillStyle = '#111111';
+  for (const r of f.rects ?? []) sctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
+  const sx = Math.max(0, Math.round(f.rect.x * scale));
+  const sy = Math.max(0, Math.round(f.rect.y * scale));
+  const sw = Math.min(Math.round(f.rect.w * scale), bitmap.width - sx);
+  const sh = Math.min(Math.round(f.rect.h * scale), bitmap.height - sy);
+  const k = Math.min(1, 1600 / sw);
+  const out = new OffscreenCanvas(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
+  out.getContext('2d')!.drawImage(screen, sx, sy, sw, sh, 0, 0, out.width, out.height);
+  return blobToDataUrl(await out.convertToBlob({ type: 'image/jpeg', quality: 0.85 }));
 }
 
 function rectsMatch(a: Rect[], b: Rect[]): boolean {

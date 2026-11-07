@@ -37,22 +37,43 @@ export function orderId(v) {
   return s;
 }
 
-/** A DoorDash store ID is optional. A missing one is normal (a first dispute for a store has no history). */
-export function validateStore(storeId) {
-  if (storeId !== null && storeId !== undefined && !/^[0-9]{3,32}$/.test(storeId)) throw new HttpError(422, 'Invalid DoorDash store ID');
-  return storeId || null;
+export const PLATFORMS = ['doordash', 'ubereats', 'grubhub'];
+
+/** Which delivery platform the order is on. Older clients send nothing, which means DoorDash. */
+export function platform(v) {
+  if (v === undefined || v === null || v === '') return 'doordash';
+  if (!PLATFORMS.includes(v)) throw new HttpError(422, 'Unsupported platform');
+  return v;
 }
 
-function orderUrl(v) {
+/**
+ * A store ID is optional. A missing one is normal (a first dispute for a store has no history).
+ * DoorDash store IDs are digits; Uber Eats and Grubhub use longer codes such as UUIDs.
+ */
+export function validateStore(storeId, on = 'doordash') {
+  if (storeId === null || storeId === undefined) return null;
+  const ok = on === 'doordash' ? /^[0-9]{3,32}$/.test(storeId) : /^[A-Za-z0-9-]{3,64}$/.test(storeId);
+  if (!ok) throw new HttpError(422, 'Invalid store ID');
+  return storeId;
+}
+
+const PORTAL_HOSTS = {
+  doordash: /^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com(?:\/|$)/i,
+  ubereats: /^https:\/\/(?:[a-z0-9-]+\.)*(?:ubereats|uber)\.com(?:\/|$)/i,
+  grubhub: /^https:\/\/(?:[a-z0-9-]+\.)*grubhub\.com(?:\/|$)/i,
+};
+
+function orderUrl(v, on = 'doordash') {
   const url = optionalString(v, 2000);
-  if (url && !/^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com(?:\/|$)/i.test(url)) throw new HttpError(422, 'Invalid DoorDash URL');
+  if (url && !PORTAL_HOSTS[on].test(url)) throw new HttpError(422, 'The order URL does not belong to this platform');
   return url;
 }
 
 const IMAGE = /^data:image\/(png|jpeg);base64,[a-zA-Z0-9+/=]+$/;
 const MAX_IMAGE_CHARS = 4500000;
-const MAX_TOTAL_IMAGE_CHARS = 12000000;
-const MAX_IMAGES = 6;
+const MAX_TOTAL_IMAGE_CHARS = 14000000;
+// A tall order page arrives as up to 6 slices, plus up to 3 photos the customer uploaded.
+const MAX_IMAGES = 9;
 
 function screenshots(x) {
   const list = [];
@@ -84,16 +105,17 @@ function conversation(v) {
 
 export function sanitizeCapture(x) {
   if (!x || typeof x !== 'object' || Array.isArray(x)) throw new HttpError(422, 'Expected object');
-  if (x.platform !== undefined && x.platform !== 'doordash') throw new HttpError(422, 'DoorDash only');
-  const storeId = validateStore(optionalString(x.store_id, 128));
+  const on = platform(x.platform);
+  const storeId = validateStore(optionalString(x.store_id, 128), on);
   const facts = x.structured_facts ?? {};
   if (typeof facts !== 'object' || facts === null || Array.isArray(facts) || JSON.stringify(facts).length > 12000) {
     throw new HttpError(422, 'Invalid structured_facts');
   }
   return {
+    platform: on,
     storeId,
     orderId: orderId(x.order_id),
-    orderUrl: orderUrl(x.order_url),
+    orderUrl: orderUrl(x.order_url, on),
     issueCategory: optionalString(x.issue_category, 256),
     issueDescription: optionalString(x.issue_description, 4000),
     operatorQuestion: optionalString(x.operator_question, 1200),
@@ -134,14 +156,16 @@ export function sanitizeMessage(x) {
 
 export function sanitizeConfirm(x) {
   if (!x || typeof x !== 'object' || Array.isArray(x)) throw new HttpError(422, 'Expected object');
+  const on = platform(x.platform);
   return {
+    platform: on,
     conversationId: x.conversation_id === undefined || x.conversation_id === null ? null : idParam(x.conversation_id, 'conversation_id'),
-    storeId: validateStore(optionalString(x.store_id, 128)),
+    storeId: validateStore(optionalString(x.store_id, 128), on),
     orderId: orderId(x.order_id),
     disputeText: requiredString(x.dispute_text, 'dispute_text', 6000),
     submittedAt: parseIso(x.disputed_at, 'disputed_at'),
     amount: money(x.dispute_amount),
-    orderUrl: orderUrl(x.order_url),
+    orderUrl: orderUrl(x.order_url, on),
     issueCategory: optionalString(x.issue_category, 256),
   };
 }

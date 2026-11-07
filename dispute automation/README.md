@@ -1,21 +1,40 @@
-# KoreFi Dispute Assistant v0.8
+# KoreFi Dispute Assistant v0.10
 
-A Chrome side-panel extension and a small agent service for DoorDash disputes. The operator opens an order in the
-DoorDash merchant portal, captures it, asks the agent what to do, edits the draft, **files the dispute in DoorDash
-themselves**, and then confirms. Nothing is ever submitted to DoorDash by this software.
+A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
+(Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
+draft, **files the dispute on the platform themselves**, and then confirms. Nothing is ever submitted by this software.
 
 ```
-DoorDash tab ── capture (scroll, redact, stitch) ──► side panel ── Send ──► Pi agent service (Render) ──► Neon
-                                                         ▲                    │  chat, images, transcript saved
-                                                         └─ answer + draft ◄──┘  agent resumes the same conversation
+DoorDash / Uber Eats tab ── attach (scroll, redact, stitch, customer photos) ──► side panel ── Send ──► agent service (Render) ──► Neon
+                                                                                   ▲                      │  chat, images, transcript saved
+                                                                                   └─ answer + draft ◄────┘  agent resumes the same conversation
 ```
 
 ## Using it
 
 1. `npm install && npm run build`, then in Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → `dist/`.
-2. Open a DoorDash order, click the KoreFi icon on that tab. Open Settings (sun icon) once: agent URL, your agent token, operator ID.
-3. **+** captures the order. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
-4. **Draft** tab: edit, **Copy dispute**, file it in DoorDash, then **Yes, disputed** to log it.
+2. Open an order, click the KoreFi icon on that tab. The first time, open the sidebar → **Settings** → **Connection**: agent URL, access token, your name or ID.
+3. **+** attaches the order. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
+4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+
+## What changed in v0.10: Uber Eats, and customer photos on both platforms
+
+- **Uber Eats Manager orders.** The extension recognises the platform from the address, finds the order drawer (which has no
+  dialog role), and reads the order: issue banner, deduction, timed steps, items with the flagged customisation, the customer's
+  feedback, sales, chargeback, fee and net payout. The store UUID is read from the address when present.
+- **Uber Eats redaction.** The customer at the top of the drawer and the courier card (name and face photo) are blacked out. Three
+  signals combine: names the reader found, fields Uber Eats itself marks private (`fs-mask`), and pictures of people (round or
+  small images). The same fail-closed rule applies: if they cannot be located, no screenshot is taken.
+- **Customer photos are detected and kept at full size**, on DoorDash and Uber Eats: a large picture, or a picture next to words
+  like "photo" or "feedback", that is not a face. Each is scrolled into view and cropped from a screenshot with the same black-out
+  boxes applied. Up to three go to the agent first, and the agent is told they are the customer's claim, not proof. If the feedback
+  is collapsed ("View more"), the panel says to open it and attach again.
+- **The agent knows the platform.** DoorDash orders keep the DoorDash history tools. Other platforms only get KoreFi's own past
+  cases, because the history database holds DoorDash data. No dispute deadline is computed for Uber Eats until its terms are read.
+- **Backend 0.5.0** accepts `platform` (`doordash`, `ubereats`, `grubhub`; older clients mean DoorDash), stores it on the case,
+  and allows up to 9 images per message and 24 per chat. No database migration: the `cases.platform` check already allows all three.
+- **v0.9 UI**: a minimal chat in KoreFi's design system (Radix-based gray and orange ramps, Google Sans Flex bundled locally),
+  with chats in a slide-out sidebar and the draft and sources as their own screens.
 
 ## What changed in v0.8: chats the server owns
 

@@ -151,7 +151,7 @@ test('bad input is refused with a clear 422', async () => {
       capture({ dispute_amount: -1 }),
       capture({ conversation: [{ role: 'system', text: 'x' }] }),
       capture({ screenshots: ['not an image'] }),
-      capture({ screenshots: Array(7).fill(IMG) }),
+      capture({ screenshots: Array(10).fill(IMG) }),
     ];
     for (const body of bad) assert.equal((await s.call('POST', '/v1/investigations', body)).status, 422, JSON.stringify(body).slice(0, 80));
     assert.equal((await s.call('GET', '/v1/investigations/does-not-exist')).status, 404);

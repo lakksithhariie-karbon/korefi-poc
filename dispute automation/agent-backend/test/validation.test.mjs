@@ -102,3 +102,22 @@ test('limiter counts per caller and resets after the window', () => {
   t = 1500;
   assert.equal(hit('a'), 0);
 });
+
+test('Uber Eats orders are accepted with their own URL and store ID format', () => {
+  const ue = sanitizeCapture({ platform: 'ubereats', order_id: 'D2D46', store_id: '3f2c9a1e-5b7d-4c11-9a0e-1234567890ab', order_url: 'https://merchants.ubereats.com/manager/orders/abc' });
+  assert.equal(ue.platform, 'ubereats');
+  assert.equal(ue.storeId, '3f2c9a1e-5b7d-4c11-9a0e-1234567890ab');
+  assert.equal(sanitizeCapture(base).platform, 'doordash', 'older clients send no platform and mean DoorDash');
+  assert.throws(() => sanitizeCapture({ platform: 'ubereats', order_id: 'D2D46', order_url: 'https://merchant.doordash.com/orders/1' }), HttpError);
+  assert.throws(() => sanitizeCapture({ platform: 'doordash', order_id: 'D2D46', store_id: 'not-digits' }), HttpError);
+  assert.throws(() => sanitizeCapture({ platform: 'deliveroo', order_id: 'D2D46' }), HttpError);
+  assert.equal(sanitizeConfirm({ platform: 'ubereats', order_id: 'D2D46', dispute_text: 'x', disputed_at: '2026-11-07T10:00:00Z' }).platform, 'ubereats');
+});
+
+test('the prompt names the platform and tells the agent which images are customer photos', () => {
+  const p = buildPrompt({ platform: 'ubereats', orderId: 'D2D46', storeId: 'unresolved', conversation: [], screenshots: ['a', 'b', 'c'], facts: { attached_images: { customer_photos: 1 } } });
+  assert.match(p, /Platform: Uber Eats\./);
+  assert.match(p, /The first image is a photo the customer uploaded/);
+  assert.match(p, /2 screenshot images of the order page are attached after the photos/);
+  assert.match(p, /history is only available for DoorDash/i);
+});

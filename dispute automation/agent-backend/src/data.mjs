@@ -85,8 +85,9 @@ export function createPgStore(env = process.env) {
       return !!(a && b);
     },
 
-    async resolveStore(orderId) {
-      if (!orderId || String(orderId).startsWith('SCREENSHOT-')) return null;
+    /** DoorDash only: the history database holds DoorDash orders. Other platforms have no lookup yet. */
+    async resolveStore(orderId, platform = 'doordash') {
+      if (platform !== 'doordash' || !orderId || String(orderId).startsWith('SCREENSHOT-')) return null;
       const { history } = pools();
       const { rows } = await history.query(
         `SELECT DISTINCT store_id FROM (
@@ -104,7 +105,7 @@ export function createPgStore(env = process.env) {
       const { rows } = await db.query(
         `INSERT INTO dispute_automation.cases
           (tenant_id,platform,platform_store_id,platform_order_id,order_url,issue_category,issue_description,error_amount,currency,captured_by,capture_status,structured_facts,redacted_page_text)
-          VALUES($1,'doordash',$2,$3,$4,$5,$6,$7,'USD',$8,$9,$10::jsonb,$11)
+          VALUES($1,$12,$2,$3,$4,$5,$6,$7,'USD',$8,$9,$10::jsonb,$11)
           ON CONFLICT (tenant_id,platform,platform_store_id,platform_order_id) DO UPDATE SET
             order_url=COALESCE(EXCLUDED.order_url,dispute_automation.cases.order_url),
             issue_category=COALESCE(EXCLUDED.issue_category,dispute_automation.cases.issue_category),
@@ -113,19 +114,19 @@ export function createPgStore(env = process.env) {
             captured_by=EXCLUDED.captured_by,capture_status=EXCLUDED.capture_status,
             structured_facts=EXCLUDED.structured_facts,redacted_page_text=COALESCE(EXCLUDED.redacted_page_text,dispute_automation.cases.redacted_page_text),updated_at=now()
           RETURNING id,tenant_id,platform_store_id,platform_order_id`,
-        [tenant, p.storeId, p.orderId, p.orderUrl, p.issueCategory, p.issueDescription, p.amount, operator, p.captureStatus, JSON.stringify(p.facts), p.redactedText],
+        [tenant, p.storeId, p.orderId, p.orderUrl, p.issueCategory, p.issueDescription, p.amount, operator, p.captureStatus, JSON.stringify(p.facts), p.redactedText, p.platform || 'doordash'],
       );
       return rows[0];
     },
 
     /** The case for an order, preferring a real store over the unresolved placeholder. */
-    async findCase(tenant, orderId, storeIds) {
+    async findCase(tenant, orderId, storeIds, platform = 'doordash') {
       const { db } = pools();
       const { rows } = await db.query(
-        `SELECT id,platform_store_id,platform_order_id FROM dispute_automation.cases
-          WHERE tenant_id=$1 AND platform='doordash' AND platform_order_id=$2 AND platform_store_id = ANY($3::text[])
+        `SELECT id,platform,platform_store_id,platform_order_id FROM dispute_automation.cases
+          WHERE tenant_id=$1 AND platform=$5 AND platform_order_id=$2 AND platform_store_id = ANY($3::text[])
           ORDER BY (platform_store_id=$4) ASC, updated_at DESC LIMIT 1`,
-        [tenant, orderId, storeIds, UNRESOLVED_STORE],
+        [tenant, orderId, storeIds, UNRESOLVED_STORE, platform],
       );
       return rows[0] || null;
     },
@@ -133,7 +134,7 @@ export function createPgStore(env = process.env) {
     async getCaseFacts(caseId) {
       const { db } = pools();
       const { rows } = await db.query(
-        `SELECT id,platform_store_id,platform_order_id,order_url,issue_category,issue_description,error_amount,structured_facts,redacted_page_text
+        `SELECT id,platform,platform_store_id,platform_order_id,order_url,issue_category,issue_description,error_amount,structured_facts,redacted_page_text
           FROM dispute_automation.cases WHERE id=$1`,
         [caseId],
       );
@@ -265,7 +266,7 @@ export function createPgStore(env = process.env) {
       try {
         const { rows } = await db.query(
           `SELECT v.id,v.case_id,v.title,v.status,v.created_by,v.last_recommendation,v.created_at,v.updated_at,
-              c.platform_order_id,c.platform_store_id,c.case_status,c.error_amount
+              c.platform,c.platform_order_id,c.platform_store_id,c.case_status,c.error_amount
             FROM dispute_automation.conversations v JOIN dispute_automation.cases c ON c.id=v.case_id
             WHERE v.id=$1 AND v.tenant_id=$2`,
           [id, tenant],
@@ -281,7 +282,7 @@ export function createPgStore(env = process.env) {
       const { db } = pools();
       const { rows } = await db.query(
         `SELECT v.id,v.case_id,v.title,v.status,v.created_by,v.last_recommendation,v.created_at,v.updated_at,
-            c.platform_order_id,c.platform_store_id,c.error_amount
+            c.platform,c.platform_order_id,c.platform_store_id,c.error_amount
           FROM dispute_automation.conversations v JOIN dispute_automation.cases c ON c.id=v.case_id
           WHERE v.tenant_id=$1 AND v.status<>'archived' ORDER BY v.updated_at DESC LIMIT $2`,
         [tenant, limit],
@@ -458,7 +459,7 @@ export function createPgStore(env = process.env) {
         return rows;
       },
       /** Newest first. (The first version ordered by uuid, which is arbitrary, not chronological.) */
-      async similarCases(tenant, storeId, category, orderId) {
+      async similarCases(tenant, storeId, category, orderId, platform = 'doordash') {
         const { db } = pools();
         const { rows } = await db.query(
           `SELECT c.platform_order_id,c.issue_category,c.error_amount,c.created_at,
@@ -470,11 +471,11 @@ export function createPgStore(env = process.env) {
             LEFT JOIN LATERAL (SELECT id FROM dispute_automation.submissions WHERE case_id=c.id ORDER BY submitted_at DESC LIMIT 1) s ON true
             LEFT JOIN dispute_automation.outcomes o ON o.submission_id=s.id
             LEFT JOIN dispute_automation.recovery_adjustments r ON r.submission_id=s.id
-            WHERE c.tenant_id=$1 AND c.platform='doordash' AND c.platform_store_id=$2
+            WHERE c.tenant_id=$1 AND c.platform=$5 AND c.platform_store_id=$2
               AND c.platform_order_id<>$4 AND ($3::text IS NULL OR lower(c.issue_category)=lower($3))
             GROUP BY c.id,c.platform_order_id,c.issue_category,c.error_amount,c.created_at,o.decision_status,o.awarded_amount,i.recommendation,i.reasoning_summary
             ORDER BY c.created_at DESC LIMIT 8`,
-          [tenant, storeId, category, orderId],
+          [tenant, storeId, category, orderId, platform],
         );
         return rows;
       },

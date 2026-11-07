@@ -15,6 +15,8 @@ cpSync('src/sidepanel/sidepanel.html', 'dist/sidepanel.html');
 cpSync('src/sidepanel/sidepanel.css', 'dist/sidepanel.css');
 cpSync('src/sidepanel/app.js', 'dist/sidepanel.js');
 cpSync('src/sidepanel/logo.png', 'dist/logo.png');
+// Google Sans Flex (OFL), bundled so the panel never loads a remote font.
+cpSync('src/sidepanel/fonts', 'dist/fonts', { recursive: true });
 
 const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
 const testOrigin = process.env.TEST_ORIGIN;

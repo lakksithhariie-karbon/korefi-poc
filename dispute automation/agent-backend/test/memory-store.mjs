@@ -31,13 +31,14 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     async ready() {
       return true;
     },
-    async resolveStore(orderId) {
-      return resolve[orderId] ?? null;
+    async resolveStore(orderId, platform = 'doordash') {
+      return platform === 'doordash' ? resolve[orderId] ?? null : null;
     },
     async upsertCase(tenant, operator, p) {
-      let c = cases.find((x) => x.tenant === tenant && x.platform_store_id === p.storeId && x.platform_order_id === p.orderId);
+      const platform = p.platform || 'doordash';
+      let c = cases.find((x) => x.tenant === tenant && x.platform === platform && x.platform_store_id === p.storeId && x.platform_order_id === p.orderId);
       if (!c) {
-        c = { id: uid(), tenant, platform_store_id: p.storeId, platform_order_id: p.orderId, status: 'new' };
+        c = { id: uid(), tenant, platform, platform_store_id: p.storeId, platform_order_id: p.orderId, status: 'new' };
         cases.push(c);
       }
       Object.assign(c, {
@@ -52,8 +53,8 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
       });
       return { id: c.id, tenant_id: tenant, platform_store_id: c.platform_store_id, platform_order_id: c.platform_order_id };
     },
-    async findCase(tenant, orderId, storeIds) {
-      const matches = cases.filter((c) => c.tenant === tenant && c.platform_order_id === orderId && storeIds.includes(c.platform_store_id));
+    async findCase(tenant, orderId, storeIds, platform = 'doordash') {
+      const matches = cases.filter((c) => c.tenant === tenant && c.platform === platform && c.platform_order_id === orderId && storeIds.includes(c.platform_store_id));
       matches.sort((a, b) => Number(a.platform_store_id === UNRESOLVED_STORE) - Number(b.platform_store_id === UNRESOLVED_STORE));
       const c = matches[0];
       return c ? { id: c.id, platform_store_id: c.platform_store_id, platform_order_id: c.platform_order_id } : null;
@@ -110,7 +111,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     // ---- conversations ----
     async getCaseFacts(caseId) {
       const c = cases.find((x) => x.id === caseId);
-      return c && { id: c.id, platform_store_id: c.platform_store_id, platform_order_id: c.platform_order_id, order_url: c.order_url, issue_category: c.issue_category, issue_description: c.issue_description, error_amount: c.amount, structured_facts: c.structured_facts, redacted_page_text: c.redacted_page_text };
+      return c && { id: c.id, platform: c.platform, platform_store_id: c.platform_store_id, platform_order_id: c.platform_order_id, order_url: c.order_url, issue_category: c.issue_category, issue_description: c.issue_description, error_amount: c.amount, structured_facts: c.structured_facts, redacted_page_text: c.redacted_page_text };
     },
     async createConversation(tenant, caseId, operator, title) {
       const v = { id: uid(), tenant, case_id: caseId, title, created_by: operator, status: 'open', last_recommendation: null, created_at: new Date(Date.now() + seq++), updated_at: new Date(Date.now() + seq++) };
@@ -120,7 +121,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
     async getConversation(tenant, id) {
       const v = conversations.find((x) => String(x.id) === String(id) && x.tenant === tenant);
       const c = v && cases.find((x) => x.id === v.case_id);
-      return v && { ...v, platform_order_id: c.platform_order_id, platform_store_id: c.platform_store_id, case_status: c.status, error_amount: c.amount };
+      return v && { ...v, platform: c.platform, platform_order_id: c.platform_order_id, platform_store_id: c.platform_store_id, case_status: c.status, error_amount: c.amount };
     },
     async listConversations(tenant, limit = 50) {
       return conversations
@@ -130,7 +131,7 @@ export function createMemoryStore({ resolve = {}, chats = 'ready' } = {}) {
         .slice(0, limit)
         .map((v) => {
           const c = cases.find((x) => x.id === v.case_id);
-          return { ...v, platform_order_id: c.platform_order_id, platform_store_id: c.platform_store_id, error_amount: c.amount };
+          return { ...v, platform: c.platform, platform_order_id: c.platform_order_id, platform_store_id: c.platform_store_id, error_amount: c.amount };
         });
     },
     async touchConversation(id, patch = {}) {

@@ -1,3 +1,7 @@
+import type { Platform } from './platform.ts';
+
+export type { Platform };
+
 export interface TimePair {
   actual: string | null;
   quoted: string | null;
@@ -25,8 +29,15 @@ export interface Transaction {
   amount: number | null;
 }
 
-/** What the content script reads off a DoorDash order page. Contains no customer or Dasher names. */
+export interface TimelineEvent {
+  time: string;
+  event: string;
+}
+
+/** What the content script reads off an order page. Contains no customer, Dasher or courier names. */
 export interface OrderSnapshot {
+  /** Absent on captures made before platforms were added, which were all DoorDash. */
+  platform?: Platform;
   orderId: string;
   placedAtText: string | null;
   /** Local time, YYYY-MM-DDTHH:mm */
@@ -49,6 +60,10 @@ export interface OrderSnapshot {
   errorCredit: number | null;
   estimatedPayout: number | null;
   transactions: Transaction[];
+  /** Uber Eats shows the order's progress as timed steps. */
+  timeline?: TimelineEvent[];
+  /** The restaurant name and address line, when the page shows it. */
+  shop?: string | null;
 }
 
 export interface ParsedOrder {
@@ -83,6 +98,7 @@ export interface FramePayload {
 
 /** What the page reader found on an order sheet the parser understands. Contains no customer or Dasher names. */
 export interface PagePayload {
+  platform: Platform;
   url: string;
   snapshot: OrderSnapshot;
   redactedText: string;
@@ -90,12 +106,26 @@ export interface PagePayload {
 
 /** What the page reader can say about any DoorDash page, even one the parser does not understand. */
 export interface CaptureContext {
+  platform: Platform;
   orderId: string | null;
   storeId: string | null;
   title: string;
   url: string;
   /** Page text with personal details removed. */
   safeText: string;
+  /** How many customer-uploaded photos are on the order right now. */
+  photoCount: number;
+  /** Something the operator can do on the page for a better capture, such as expanding collapsed feedback. */
+  hint: string | null;
+}
+
+/** One customer photo, scrolled into view and measured, ready to be cropped from a screenshot. */
+export interface PhotoFrame {
+  /** The photo's visible area (viewport CSS px). */
+  rect: Rect;
+  /** Personal details to black out at this scroll position. Null when they could not be located. */
+  rects: Rect[] | null;
+  viewport: Viewport;
 }
 
 export interface RuleFacts {
@@ -112,8 +142,9 @@ export type CaseStatus = 'new' | 'filed' | 'skipped' | 'won' | 'lost';
 
 export interface CaseRecord {
   id: string;
+  platform: Platform;
   orderId: string;
-  /** DoorDash store ID when the page revealed it. Investigations work without it. */
+  /** Store ID when the page revealed it. Investigations work without it. */
   storeId: string | null;
   createdAt: string;
   trigger: 'manual';
@@ -123,6 +154,8 @@ export interface CaseRecord {
   /** Redacted JPEG data URL. Absent when personal details could not be hidden, in which case no screenshot is taken. */
   image: string | null;
   imageNote: string | null;
+  /** Photos the customer uploaded with their complaint, as JPEG data URLs at full size. */
+  photos: string[];
   facts: RuleFacts;
   assessment: unknown | null;
   status: CaseStatus;
@@ -134,4 +167,5 @@ export type RuntimeMessage =
   | { type: 'CAPTURE_FAILED'; reason: string }
   | { type: 'GET_PAYLOAD' }
   | { type: 'GET_CAPTURE_CONTEXT' }
-  | { type: 'SCROLL_FRAME'; top: number | null };
+  | { type: 'SCROLL_FRAME'; top: number | null }
+  | { type: 'PHOTO_FRAME'; index: number; scroll: boolean };

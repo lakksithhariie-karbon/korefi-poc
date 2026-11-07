@@ -4,9 +4,11 @@ import { HttpError, idParam, readToken, requiredString, sanitizeCapture, sanitiz
 
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_CONCURRENT_RUNS = 4;
-const MAX_IMAGES_PER_CONVERSATION = 12;
+// Two captures of a long order with customer photos fit; more than that should be a new chat.
+const MAX_IMAGES_PER_CONVERSATION = 24;
 const DAY_MS = 86_400_000;
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
+const PLATFORM_NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 
 const sha = (s) => createHash('sha256').update(s).digest();
 
@@ -277,6 +279,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
   const publicConversation = (c) => ({
     id: String(c.id),
     case_id: String(c.case_id),
+    platform: c.platform || 'doordash',
     order_id: c.platform_order_id,
     store_id: c.platform_store_id,
     title: c.title,
@@ -304,7 +307,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     const p = sanitizeConversationStart(body);
     const operator = who.operator || requiredString(body.operator_id, 'operator_id', 128);
     if (p.screenshots.length > MAX_IMAGES_PER_CONVERSATION) throw new HttpError(422, 'Too many images');
-    p.storeId = p.storeId || (await store.resolveStore(p.orderId).catch(() => null)) || UNRESOLVED_STORE;
+    p.storeId = p.storeId || (await store.resolveStore(p.orderId, p.platform).catch(() => null)) || UNRESOLVED_STORE;
     const c = await store.upsertCase(TENANT, operator, p);
     const id = await store.createConversation(TENANT, c.id, operator, p.title || `Order ${p.orderId}`);
     const images = await storeImages({ id, case_id: c.id }, p.screenshots);
@@ -362,6 +365,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
       const images = stored.map((r) => ({ type: 'image', data: Buffer.from(r.bytes).toString('base64'), mimeType: r.mime }));
       const facts = await store.getCaseFacts(conv.case_id);
       const request = {
+        platform: facts?.platform || conv.platform || 'doordash',
         storeId: conv.platform_store_id,
         orderId: conv.platform_order_id,
         orderUrl: facts?.order_url ?? null,
@@ -446,13 +450,14 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     if (p.conversationId) await requireChats();
     const conv = p.conversationId ? await store.getConversation(TENANT, p.conversationId) : null;
     if (p.conversationId && !conv) throw new HttpError(404, 'Conversation not found');
-    const resolved = p.storeId || (await store.resolveStore(p.orderId).catch(() => null));
+    const resolved = p.storeId || (await store.resolveStore(p.orderId, p.platform).catch(() => null));
     const candidates = [...new Set([p.storeId, resolved, UNRESOLVED_STORE].filter(Boolean))];
     // A chat knows its own case. Otherwise find it by order, and if the agent never saw the order, log the filing anyway.
     const c =
       (conv && { id: conv.case_id, platform_store_id: conv.platform_store_id }) ||
-      (await store.findCase(TENANT, p.orderId, candidates)) ||
+      (await store.findCase(TENANT, p.orderId, candidates, p.platform)) ||
       (await store.upsertCase(TENANT, operator, {
+        platform: p.platform,
         storeId: resolved || UNRESOLVED_STORE,
         orderId: p.orderId,
         orderUrl: p.orderUrl,
@@ -463,10 +468,11 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
         facts: {},
         redactedText: null,
       }));
-    const key = `doordash:${c.platform_store_id}:${p.orderId}`;
+    const on = conv?.platform || p.platform;
+    const key = `${on}:${c.platform_store_id}:${p.orderId}`;
     const r = await store.recordSubmission(TENANT, c.id, key, operator, p.disputeText, p.submittedAt);
     if (conv && !r.already_recorded) {
-      await store.appendMessage(conv.id, 'system', `Marked as disputed by ${operator}. The dispute was filed in DoorDash by the operator.`).catch(() => {});
+      await store.appendMessage(conv.id, 'system', `Marked as disputed by ${operator}. The dispute was filed in ${PLATFORM_NAMES[on] || 'the platform'} by the operator.`).catch(() => {});
       await store.touchConversation(conv.id, { status: 'disputed' }).catch(() => {});
     }
     return reply(200, { ...r, case_id: c.id, store_id: c.platform_store_id });
