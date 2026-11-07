@@ -25,6 +25,7 @@ const FACE = svg('<circle cx="22" cy="22" r="22" fill="#ff00ff"/>', 44, 44);
 const PHOTO = (w, h) => svg(`<rect width="${w}" height="${h}" fill="#f08a00"/><rect x="20" y="20" width="${w / 3}" height="${h / 4}" fill="#ffd27a"/>`, w, h);
 const UBER_STORE = '3f2c9a1e-5b7d-4c11-9a0e-1234567890ab';
 const pickupFixture = readFileSync(path.join(root, 'fixtures', 'ubereats-5DE2A-pickup.txt'), 'utf8').split('\n').filter(Boolean);
+const closedFixture = readFileSync(path.join(root, 'fixtures', 'ubereats-365D6-closed.txt'), 'utf8').split('\n').filter(Boolean);
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const STYLE = `<style>
   body{font:14px system-ui;margin:0;background:#f4f4f4}h1{margin:24px}
@@ -125,8 +126,17 @@ function uberPickupPage() {
       <div style="overflow:auto;width:100%;padding:16px;box-sizing:border-box">${parts.join('')}</div></div></body></html>`;
 }
 
+/** Order 365D6: over 30 days old, only "Contact support", and a $2.00 charge with no amount on any single item. */
+function uberClosedPage() {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Uber Eats Manager</title>${STYLE}</head>
+    <body><div data-baseweb="block"><h1>Orders</h1></div>
+    <div data-baseweb="block" style="position:fixed;right:0;top:0;width:500px;height:100vh;display:flex;background:#fff">
+      <div style="overflow:auto;width:100%;padding:16px;box-sizing:border-box">${closedFixture.map((l) => `<div class="line">${esc(l)}</div>`).join('')}</div></div></body></html>`;
+}
+
 const pageFor = (url) => {
   const p = new URL(url, 'http://x').pathname;
+  if (p.startsWith('/ubereats-closed')) return uberClosedPage();
   if (p.startsWith('/ubereats-pickup')) return uberPickupPage();
   return p === '/changed' ? changedPage() : p === '/unknown' ? unknownPage() : p.startsWith('/ubereats') ? uberPage() : orderPage();
 };
@@ -508,6 +518,23 @@ try {
   check('pickup order: the text keeps the name and order count', !!p && /Jeff J/.test(p.redactedText) && /27 orders/.test(p.redactedText));
   check('pickup order: no customer photo is invented', Array.isArray(p?.photos) && p.photos.length === 0);
   if (p?.image) writeFileSync(path.join(out, 'ubereats-pickup-captured.jpg'), Buffer.from(p.image.split(',')[1], 'base64'));
+
+  // 14. The charge sent to the agent is the page's own total ($2.00), not the extension's estimate (which reads $0 here).
+  await panel.click('#newChat');
+  const closedTab = await context.newPage();
+  await closedTab.goto(`http://localhost:${portalPort}/ubereats-closed`);
+  const k = await capture(closedTab, `http://localhost:${portalPort}/ubereats-closed*`);
+  check('closed-window order is captured', k?.orderId === '365D6' && k?.snapshot.errorChargeTotal === -2, `${k?.orderId} ${k?.snapshot?.errorChargeTotal}`);
+  await panel.waitForSelector('#attachment:not([hidden])');
+  const callsBefore = agentCalls.length;
+  await panel.fill('#prompt', 'can i dispute?');
+  await panel.press('#prompt', 'Enter');
+  await waitFor(() => agentCalls.length > callsBefore, 40000);
+  const kOpen = JSON.parse(pi.bodies.filter((b) => b.url === '/v1/conversations').at(-1).raw);
+  check('the chat is opened with the page\'s $2.00 charge', kOpen.dispute_amount === 2, String(kOpen.dispute_amount));
+  check('the agent is told the charge is $2.00', agentCalls.at(-1).request.amount === 2, String(agentCalls.at(-1).request.amount));
+  check('the agent gets the page\'s "can\'t be disputed" notice', /more than 30 days ago can’t be disputed/.test(agentCalls.at(-1).request.redactedText || ''));
+  await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
 
   await panel.screenshot({ path: path.join(out, 'panel-final.png') });
   await panel.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));

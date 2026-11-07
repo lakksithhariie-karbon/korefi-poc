@@ -1,0 +1,74 @@
+PQ
+Pat Q
+14 orders
+Order 365D6
+29 Sept 2025
+Odd One Out Tea (Sawtelle) (11301 West Olympic Boulevard, Ste 124)
+2 Customisations reported missing
+$2.00 deducted from net payout
+Customer had reported they didn’t receive their order. Refunds on orders placed more than 30 days ago can’t be disputed. Contact support if you think we got this wrong.
+Contact support
+Delivery details
+RIVER
+95%
+1071 orders delivered
+Rate
+Order details
+20:50
+Order placed by customer
+20:50
+Order accepted by POS integration
+20:50
+Order confirmed by shop
+20:56
+Courier departs
+21:01
+Order delivered to customer
+1
+*Jasmine Green Oolong
+$7.50
+(OPTIONAL) Change Sugar Level - Default Perfect Sugar (50%)
+1
+Less Sugar (25%)
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+5 Piece Ice
+(OPTIONAL) Add Topping
+1
+Jasmine Silk Boba
+$1.00
+22oz/Large- COLD DRINK ONLY
+1
+Large size (22oz)- COLD DRINK ONLY
+$1.00
+1
+*Grapefruit Oolong
+2 customisations missing
+$9.50
+22oz/Large- COLD DRINK ONLY
+1
+Large size (22oz)- COLD DRINK ONLY
+Customisation reported missing
+(OPTIONAL) Change Less or Extra Sugar - Default Perfect Sugar (50%)
+1
+Less Sugar (25%)
+(OPTIONAL) ADD BOBA
+1
+Coconut Sugar Boba
+Customisation reported missing
+Sales (excl. tax)
+US$17.00
+Tax on sales
+US$0.93
+Net chargeback amount
+US$0.20
+Tax on chargeback amount
+-US$0.20
+Marketplace facilitator tax on sales
+-US$0.93
+Chargeback amount
+-US$2.00
+Marketplace Fee
+-US$4.76
+Net payout
+US$10.24

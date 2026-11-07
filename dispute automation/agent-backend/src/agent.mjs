@@ -27,7 +27,10 @@ export const INSTRUCTIONS =
   'Never invent proof of packing, fulfillment or delivery, dispute eligibility, or a win probability. ' +
   'Historical adjustment rows are not verified dispute wins, and a credit is not proof of a won dispute. ' +
   'Historic issue frequency is not a win rate; if outcomes are unknown, say they are unknown. ' +
-  'Never file anything on the platform. The operator files it. Deadlines and dispute rules differ by platform and must be verified on the platform. ' +
+  'Never file anything on the platform. The operator files it. ' +
+  'READ THE PLATFORM\'S RULES ON THE PAGE FIRST: deadlines, notices such as "orders placed more than 30 days ago can\'t be disputed", and which action the page offers (a Dispute button, or only Contact support). ' +
+  'If the dispute route is closed, say so in your first sentence, then fight through the route that is still open and write the draft for it. ' +
+  'Never tell the operator to use a Dispute button the page does not show, and never call a closed dispute window open. ' +
   'Recommend dispute whenever there is an honest argument, even with thin evidence: write the draft and list what would make it stronger. ' +
   'Use needs_review only when one specific piece of evidence the operator can get decides whether to dispute, and still write the draft. ' +
   'Use do_not_dispute only when the evidence clearly shows the store made the mistake, and say what shows it. ' +
@@ -154,8 +157,10 @@ export async function investigate({ store, tenant, request, runId, env = process
       }
       tokens.calls++;
       const asked = (event.message.content || []).filter((c) => c.type === 'toolCall').map((c) => c.name);
+      // Providers with prompt caching (Anthropic) count cached input apart from new input; tokens_in is the whole prompt.
       step('agent_model_replied', {
-        tokens_in: u?.input ?? null,
+        tokens_in: u ? (u.input || 0) + (u.cacheRead || 0) + (u.cacheWrite || 0) : null,
+        cached_in: u?.cacheRead || 0,
         tokens_out: u?.output ?? null,
         stop: event.message.stopReason ?? null,
         wants_tools: asked.length ? asked : undefined,
@@ -208,7 +213,7 @@ export async function investigate({ store, tenant, request, runId, env = process
     if (!toolTrace.length && first) {
       out.risk_notes = [out.risk_notes, 'No database lookup was made for this answer.'].filter(Boolean).join(' ');
     }
-    const total = { tokens_in: tokens.input, tokens_out: tokens.output, cache_read: tokens.cacheRead, cache_write: tokens.cacheWrite, cost_usd: Number(tokens.cost.toFixed(6)), model_calls: tokens.calls };
+    const total = { tokens_in: tokens.input + tokens.cacheRead + tokens.cacheWrite, new_tokens_in: tokens.input, tokens_out: tokens.output, cache_read: tokens.cacheRead, cache_write: tokens.cacheWrite, cost_usd: Number(tokens.cost.toFixed(6)), model_calls: tokens.calls };
     step('agent_run_finished', { recommendation: out.recommendation, tools: toolTrace.map((t) => `${t.name}:${t.count}`), ...total });
     step('agent_answer', {
       recommendation: out.recommendation,
@@ -219,7 +224,7 @@ export async function investigate({ store, tenant, request, runId, env = process
     });
     return { ...out, model: modelId, tools_used: toolTrace, transcript: resuming ? exportTranscript(agent.state.messages) : null };
   } catch (err) {
-    step('agent_run_failed', { message: String(err?.message || err).slice(0, 500), tokens_in: tokens.input, tokens_out: tokens.output });
+    step('agent_run_failed', { message: String(err?.message || err).slice(0, 500), tokens_in: tokens.input + tokens.cacheRead + tokens.cacheWrite, tokens_out: tokens.output });
     throw err;
   } finally {
     clearTimeout(timeout);

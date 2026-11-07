@@ -346,10 +346,18 @@
     }
     throw Error('This is taking longer than expected. Send your message again.');
   }
+  // The charge as the page states it ("Chargeback amount", "Error charge total"). The extension's own estimate is only a
+  // fallback: it adds up per-item amounts and reads 0 when the page gives none, as Uber Eats often does.
+  function chargeAmount(c){
+    const page=c?.snapshot?.errorChargeTotal;
+    if(page!=null&&Number.isFinite(Number(page)))return Number(page);
+    const estimate=Number(c?.facts?.errorTotal);
+    return estimate>0?estimate:NaN;
+  }
   function caseFacts(c){
     const facts=c.snapshot||{};
     const reasons=(c.snapshot?.errorCharges||[]).map(x=>x.reason).filter(Boolean);
-    const amount=Number(c.facts?.errorTotal??c.snapshot?.errorChargeTotal);
+    const amount=chargeAmount(c);
     const photos=photosOf(c).length;
     return {platform:platformOf(c),operator_id:settings.operatorId||'poc-operator',
       // A missing store ID is fine: the agent still investigates and drafts from the order and screenshot.
@@ -542,7 +550,7 @@
   async function syncFiling(record){
     if(!ready())return {state:'pending',error:'Not connected to the agent, so it is saved in this browser only.'};
     const url=settings.agentUrl.trim().replace(/\/+$/,'')+'/v1/disputes/confirm';endpointOrigin(url);
-    const amount=Number(record.facts?.errorTotal);
+    const amount=chargeAmount(record);
     const body={platform:platformOf(record),operator_id:settings.operatorId||'poc-operator',conversation_id:record.conversationId||conversationId||null,store_id:record.agentStoreId||record.storeId||null,
       order_id:record.orderId,dispute_text:record.filing.draft,disputed_at:record.filing.confirmedAt,
       order_url:orderUrl(record),

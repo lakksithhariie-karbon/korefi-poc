@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.11.0
+# KoreFi Dispute Assistant v0.11.1
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -17,6 +17,19 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+
+## v0.11.1 and backend 0.6.1: the page's own dispute rules, the real charge, honest token counts
+
+- **Closed dispute windows.** The agent reads the platform's rules on the page first: deadlines, notices such as Uber Eats'
+  "orders placed more than 30 days ago can't be disputed", and whether the page offers a Dispute button or only Contact support.
+  When the dispute route is closed it says so first, then fights through the route that is still open. The server also spots
+  such a notice in the page text and puts it in front of the agent. PROMPT_VERSION `2026-11-07.win-2`.
+- **The real charge.** The extension sent its own estimate (the sum of per-item amounts), which is $0 when the page gives no
+  per-item amount, so every case was saved at $0.00. It now sends the page's own total ("Chargeback amount", "Error charge
+  total"), falling back to the estimate only when the page has none. Fixture `ubereats-365D6-closed.txt` (names changed).
+- **Token counts.** Claude reuses most of its prompt from a cache, so `tokens_in` now counts the whole prompt (new + cached);
+  `cached_in` and `new_tokens_in` show the split.
+- An Uber Eats answer no longer says "DoorDash-only history": the note for other platforms now names KoreFi's own past cases.
 
 ## Backend 0.6.0: an agent that fights for the money, on Vercel AI Gateway, with every step logged
 

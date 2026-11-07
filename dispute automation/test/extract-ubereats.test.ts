@@ -70,3 +70,12 @@ test('a pickup order with "27 orders" under the name', () => {
   assert.equal(s.errorCharges[0].reason, '1 customisation missing');
   assert.equal(s.fulfillment, null);
 });
+
+test('an order past Uber Eats\' 30-day limit: the page total is read even when items carry no amounts', () => {
+  const text = readFileSync(new URL('../fixtures/ubereats-365D6-closed.txt', import.meta.url), 'utf8');
+  const { snapshot: s } = parseUberOrder(text);
+  assert.equal(s.orderId, '365D6');
+  assert.equal(s.errorChargeTotal, -2, 'the "Chargeback amount" line, not "Net chargeback amount"');
+  assert.equal(s.disputeStatus, null, 'no Dispute button, only Contact support');
+  assert.match(s.notice ?? '', /more than 30 days ago can’t be disputed/);
+});

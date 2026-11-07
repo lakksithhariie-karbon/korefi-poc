@@ -1,7 +1,24 @@
 import { UNRESOLVED_STORE } from './constants.mjs';
 
 const NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
-const HISTORY_NOTE = 'Order history is only available for DoorDash so far. Do not expect financial or issue-report records for this order.';
+const HISTORY_NOTE = "There are no platform order records to search for this order. The only history is KoreFi's own past cases at this store, from find_similar_disputes. Do not mention other platforms.";
+// A notice that the platform's own dispute route is closed, such as Uber Eats' "can't be disputed" after 30 days.
+const CLOSED = /\b(?:can(?:no|'|’)?t|cannot|can no longer|no longer) be disputed\b|\bdispute (?:window|period) (?:has )?(?:closed|expired|ended)\b/i;
+
+/** What the page itself says about disputing this charge: a Dispute button, or a notice that disputes are closed. */
+function disputeRoute(request) {
+  const lines = [];
+  const text = [request.facts?.notice, request.redactedText].filter(Boolean).join('\n');
+  const closed = text.split(/\n|(?<=[.!?])\s+/).find((l) => CLOSED.test(l));
+  if (closed) {
+    lines.push(
+      'The page says: "' + closed.trim().slice(0, 300) + '" The platform\'s dispute route for this charge is closed. Say so first, ' +
+        'then make the case through the route the page still offers (for example Contact support) and write the draft for that route.',
+    );
+  }
+  if (request.facts?.disputeStatus === 'available') lines.push('The page shows a Dispute button for this charge.');
+  return lines;
+}
 
 /** The text sent to the agent for one turn. Exported so tests can check what the model is and is not told. */
 export function buildPrompt(request) {
@@ -17,6 +34,7 @@ export function buildPrompt(request) {
       : 'This is a follow-up turn. Use the conversation below. Call tools only if you need facts you do not have.',
     'Reported issue: ' + (request.issueCategory || 'unknown') + '; description: ' + (request.issueDescription || 'none'),
     'Charge: ' + (request.amount ?? 'unknown') + ' USD.',
+    ...disputeRoute(request),
     'Operator question: ' + (request.operatorQuestion || 'Provide an initial factual investigation.'),
   ];
   if (request.screenshots.length) {

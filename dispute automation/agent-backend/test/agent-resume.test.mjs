@@ -148,3 +148,26 @@ test('a run that fails is logged before the error goes back', async () => {
   await assert.rejects(investigate({ store, tenant: 't', request: request(), runId: 'run-8', env: {}, streamFn, log: (l) => lines.push(JSON.parse(l)) }));
   assert.equal(lines.at(-1).event, 'agent_run_failed');
 });
+
+test('cached input counts in tokens_in, so the log shows the whole prompt', async () => {
+  const store = createMemoryStore();
+  const cachedUsage = { input: 4, output: 100, cacheRead: 8000, cacheWrite: 1000, totalTokens: 9104, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.001 } };
+  const message = { ...base, usage: cachedUsage, role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ recommendation: 'dispute', reasoning_summary: 'x', missing_evidence: [], draft_text: 'd', suggested_followups: [], risk_notes: null }) }], stopReason: 'stop' };
+  const streamFn = () => {
+    const s = createAssistantMessageEventStream();
+    queueMicrotask(() => {
+      s.push({ type: 'start', partial: message });
+      s.push({ type: 'done', reason: 'stop', message });
+      s.end(message);
+    });
+    return s;
+  };
+  const lines = [];
+  await investigate({ store, tenant: 't', request: request({ platform: 'ubereats' }), runId: 'run-9', env: {}, streamFn, log: (l) => lines.push(JSON.parse(l)) });
+  const reply = lines.find((l) => l.event === 'agent_model_replied');
+  assert.equal(reply.tokens_in, 9004);
+  assert.equal(reply.cached_in, 8000);
+  const done = lines.find((l) => l.event === 'agent_run_finished');
+  assert.equal(done.tokens_in, 9004);
+  assert.equal(done.new_tokens_in, 4);
+});

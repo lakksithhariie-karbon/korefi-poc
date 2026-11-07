@@ -119,5 +119,6 @@ test('the prompt names the platform and tells the agent which images are custome
   assert.match(p, /Platform: Uber Eats\./);
   assert.match(p, /The first image is a photo the customer uploaded/);
   assert.match(p, /2 screenshot images of the order page are attached after the photos/);
-  assert.match(p, /history is only available for DoorDash/i);
+  assert.match(p, /The only history is KoreFi's own past cases at this store/);
+  assert.doesNotMatch(p, /DoorDash/);
 });
