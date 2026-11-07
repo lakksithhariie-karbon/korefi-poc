@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.11.1
+# KoreFi Dispute Assistant v0.11.2
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -17,6 +17,14 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+
+## v0.11.2: Uber Eats item lists read correctly
+
+- Uber Eats labels option groups "(OPTIONAL)", "(MANDATORY)", or not at all ("22oz/Large- COLD DRINK ONLY", "Upgrade Cream
+  Foam"). The reader knew only "(OPTIONAL)" and "(REQUIRED)", so a mandatory group's choice and every unlabelled group became
+  a separate "item". It now reads any line that runs straight into a quantity as an option group of the current drink.
+- Checked against three real pages, saved as fixtures with every name changed: C6005 (ten drinks), 365D6 (two missing
+  customisations on one drink, so the $2.00 is on that drink) and B80E5 (wrong item with customer feedback).
 
 ## v0.11.1 and backend 0.6.1: the page's own dispute rules, the real charge, honest token counts
 

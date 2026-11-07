@@ -8,7 +8,7 @@ const ORDER = /^Order\s+([A-Z0-9]{4,16})$/;
 const DATE = /^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})$/;
 const TIME24 = /^\d{1,2}:\d{2}$/;
 const QTY = /^\d{1,3}$/;
-const OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
+const OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED|MANDATORY)\)/i;
 const FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
 const STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
 const MONTHS: Record<string, number> = {
@@ -117,7 +117,11 @@ export function parseUberOrder(rawText: string): ParsedOrder {
     if (FLAG.test(l) && l.length < 60) {
       if (lastOption) item.flaggedOptions.push(`${lastOption} (${l})`);
       else item.flags.push(l);
+      continue;
     }
+    // Some option groups carry no (OPTIONAL) label, such as "22oz/Large- COLD DRINK ONLY" or "Upgrade Cream Foam".
+    // Every other line that runs straight into a quantity heads an option group of the current item, not a new item.
+    if (j + 1 < end && QTY.test(lines[j + 1])) header = l;
   }
 
   const value = (label: RegExp): number | null => {

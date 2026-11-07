@@ -1,0 +1,153 @@
+TM
+Tess M
+New customer
+Order C6005
+27 Aug 2026
+Odd One Out Tea (Sawtelle) (11301 West Olympic Boulevard, Ste 124)
+Dispute rejected
+$8.44 deducted from net payout
+Customer had reported 1 item missing. Your dispute was rejected and you were charged that amount.
+Details
+Delivery details
+JORDAN
+97%
+2555 orders delivered
+Rate
+Order details
+11:20
+Order placed by customer
+12:30
+Order accepted by POS integration
+12:30
+Order confirmed by shop
+12:44
+Courier departs
+13:19
+Order delivered to customer
+1
+TW 23’ Golden Buddha Silk Boba
+$8.99
+(MANDATORY) Add Boba Choice
+1
+Jasmine Silk Boba (ICE ONLY)
+(OPTIONAL) Milk Alternatives - Default Straus Organic Pure Milk
+1
+Califia Oat Milk
+$0.50
+1
+Icy Peak Milk Tea
+Item reported missing
+$8.44
+1
+Grapefruit Pomelo Silk Boba
+$7.99
+(OPTIONAL) Change Sugar Levels - Default Perfect Sugar (50%)
+1
+Mini Sugar (10%)
+(MANDATORY) Silk Boba Choice
+1
+Jasmine Silk Boba
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+5 Piece Ice
+1
+TW 22' Champion Milk Tea
+$9.44
+(OPTIONAL) Change Sugar Level - Default Perfect Sugar (50%)
+1
+Less Sugar (25%)
+(OPTIONAL) Add Topping
+1
+Jasmine Silk Boba (ICE ONLY)
+$0.95
+1
+Yuzu Osmanthus Silk Boba
+$7.99
+(OPTIONAL) Change Sugar Level - Default Perfect Sugar (50%)
+1
+Less Sugar (25%)
+(MANDATORY) Silk Boba Choice
+1
+Wintermelon Silk Boba
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+5 Piece Ice
+1
+Grapefruit Pomelo Silk Boba
+$7.99
+(MANDATORY) Silk Boba Choice
+1
+Jasmine Silk Boba
+1
+Everyday ODDinary Boba
+$8.49
+(MANDATORY) Add Boba Choice
+1
+Brown Sugar Boba
+(OPTIONAL) Change Sugar Level - Default Perfect Sugar (50%)
+1
+Extra Sugar (75%)
+1
+Pistachio Matcha
+$10.44
+(OPTIONAL) Change Ice or Hot - Default Perfect Ice
+1
+5 Piece Ice
+(OPTIONAL) Add Topping
+1
+Jasmine Silk Boba (ICE ONLY)
+$0.95
+(OPTIONAL) Milk Alternatives - Default Straus Organic Pure Milk
+1
+Califia Oat Milk
+$0.50
+1
+TW 23’ Golden Buddha Silk Boba
+$10.94
+22oz/Large- COLD DRINK ONLY
+1
+Large size (22oz)- COLD DRINK ONLY
+$1.00
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+5 Piece Ice
+(MANDATORY) Add Boba Choice
+1
+Jasmine Silk Boba (ICE ONLY)
+(OPTIONAL) Milk Alternatives - Default Straus Organic Pure Milk
+1
+Califia Oat Milk
+$0.50
+(OPTIONAL) Cream Foam
+1
+Cream Foam
+$0.95
+1
+TW 22' Champion Milk Tea
+$10.44
+(OPTIONAL) Change Sugar Level - Default Perfect Sugar (50%)
+1
+Extra Sugar (75%)
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+5 Piece Ice
+(OPTIONAL) Add Topping
+1
+Jasmine Silk Boba (ICE ONLY)
+$0.95
+(OPTIONAL) Milk Alternatives - Default Straus Organic Pure Milk
+1
+Califia Oat Milk
+$0.50
+Upgrade Cream Foam
+1
+Maple Cream Foam
+$0.50
+Sales (excl. tax)
+US$91.15
+Chargeback amount
+-US$8.44
+Marketplace Fee
+-US$26.43
+Net payout
+US$56.28

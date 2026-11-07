@@ -198,7 +198,7 @@
   var DATE = /^(\d{1,2})\s+([A-Za-z]{3,9})\.?\s+(\d{4})$/;
   var TIME24 = /^\d{1,2}:\d{2}$/;
   var QTY2 = /^\d{1,3}$/;
-  var OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED)\)/i;
+  var OPTION_HEADER = /^\((?:OPTIONAL|REQUIRED|MANDATORY)\)/i;
   var FLAG = /(customi[sz]ation (?:reported )?wrong|wrong item|item missing|missing item|missing|incorrect|wrong)/i;
   var STATUS = /^Dispute (approved|denied|rejected|declined|pending|in review|submitted)$/i;
   var MONTHS2 = {
@@ -301,7 +301,9 @@
       if (FLAG.test(l) && l.length < 60) {
         if (lastOption) item.flaggedOptions.push(`${lastOption} (${l})`);
         else item.flags.push(l);
+        continue;
       }
+      if (j + 1 < end && QTY2.test(lines[j + 1])) header = l;
     }
     const value = (label) => {
       const k = find((l) => label.test(l), end);

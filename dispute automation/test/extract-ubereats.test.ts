@@ -79,3 +79,51 @@ test('an order past Uber Eats\' 30-day limit: the page total is read even when i
   assert.equal(s.disputeStatus, null, 'no Dispute button, only Contact support');
   assert.match(s.notice ?? '', /more than 30 days ago can’t be disputed/);
 });
+
+// Real pages from the live portal (names changed). Option groups may be labelled (OPTIONAL), (MANDATORY), or not at all.
+const real = (name: string) => parseUberOrder(readFileSync(new URL(`../fixtures/${name}.txt`, import.meta.url), 'utf8')).snapshot;
+
+test('C6005: ten drinks, (MANDATORY) groups and unlabelled groups stay under their drink', () => {
+  const s = real('ubereats-C6005-rejected');
+  assert.deepEqual(s.items.map((i) => [i.name, i.price]), [
+    ['TW 23’ Golden Buddha Silk Boba', 8.99],
+    ['Icy Peak Milk Tea', 8.44],
+    ['Grapefruit Pomelo Silk Boba', 7.99],
+    ["TW 22' Champion Milk Tea", 9.44],
+    ['Yuzu Osmanthus Silk Boba', 7.99],
+    ['Grapefruit Pomelo Silk Boba', 7.99],
+    ['Everyday ODDinary Boba', 8.49],
+    ['Pistachio Matcha', 10.44],
+    ['TW 23’ Golden Buddha Silk Boba', 10.94],
+    ["TW 22' Champion Milk Tea", 10.44],
+  ]);
+  assert.ok(s.items[0].options.includes('Add Boba Choice: Jasmine Silk Boba (ICE ONLY)'), 'a (MANDATORY) group');
+  assert.ok(s.items[8].options.includes('22oz/Large- COLD DRINK ONLY: Large size (22oz)- COLD DRINK ONLY'), 'an unlabelled group');
+  assert.ok(s.items[9].options.includes('Upgrade Cream Foam: Maple Cream Foam'), 'an unlabelled group at the end of the list');
+  assert.deepEqual(s.errorCharges.map((c) => [c.item, c.reason, c.amount, c.disputeStatus]), [['Icy Peak Milk Tea', 'Item reported missing', -8.44, 'rejected']]);
+});
+
+test('365D6: the two missing customisations belong to the Grapefruit Oolong, so the charge is on one drink', () => {
+  const s = real('ubereats-365D6-closed');
+  assert.deepEqual(s.items.map((i) => i.name), ['*Jasmine Green Oolong', '*Grapefruit Oolong']);
+  assert.ok(s.items[0].options.includes('22oz/Large- COLD DRINK ONLY: Large size (22oz)- COLD DRINK ONLY'));
+  assert.equal(s.errorCharges.length, 1);
+  const c = s.errorCharges[0];
+  assert.equal(c.item, '*Grapefruit Oolong');
+  assert.equal(c.amount, -2);
+  assert.deepEqual(c.options, [
+    '22oz/Large- COLD DRINK ONLY: Large size (22oz)- COLD DRINK ONLY (Customisation reported missing)',
+    'ADD BOBA: Coconut Sugar Boba (Customisation reported missing)',
+  ]);
+});
+
+test('B80E5: a wrong-item charge with the customer\'s feedback, already rejected', () => {
+  const s = real('ubereats-B80E5-rejected');
+  assert.deepEqual(s.items.map((i) => i.name), ['Sobacha Milk Tea', 'Summer Night Black Milk Tea']);
+  const c = s.errorCharges[0];
+  assert.equal(c.item, 'Sobacha Milk Tea');
+  assert.equal(c.reason, 'Item reported wrong');
+  assert.equal(c.amount, -9.94);
+  assert.equal(c.disputeStatus, 'rejected');
+  assert.match(c.customerComment ?? '', /no caffeine and no dairy/);
+});

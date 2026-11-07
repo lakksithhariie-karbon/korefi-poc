@@ -1,0 +1,51 @@
+LP
+Lee P
+12 orders
+Order B80E5
+26 Aug 2026
+Odd One Out Tea (Sawtelle) (11301 West Olympic Boulevard, Ste 124)
+Dispute rejected
+$9.94 deducted from net payout
+Customer had reported 1 wrong item received. Your dispute was rejected and you were charged that amount.
+Details
+Delivery details
+SAM
+97%
+21270 orders delivered
+Rate
+Order details
+19:25
+Order placed by customer
+19:25
+Order accepted by POS integration
+19:25
+Order confirmed by shop
+19:35
+Courier departs
+19:45
+Order delivered to customer
+1
+Sobacha Milk Tea
+Item reported wrong
+$9.94
+Customer feedback
+I ordered a beverage with no caffeine and no dairy. I received someone else’s beverage which I cannot drink because it has caffeine and dairy. I can tell this beverage is not mine because it says the name Alex K. instead of Lee P.
+View less
+1
+Summer Night Black Milk Tea
+$8.44
+(OPTIONAL) Change Ice Level - Default Perfect ice
+1
+No Ice
+(OPTIONAL) Add Topping
+1
+Brown Sugar Boba
+$0.95
+Sales (excl. tax)
+US$18.38
+Marketplace Fee
+-US$5.51
+Chargeback amount
+-US$9.94
+Net payout
+US$2.93
