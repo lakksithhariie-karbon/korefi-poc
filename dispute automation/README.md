@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.10
+# KoreFi Dispute Assistant v0.10.2
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -14,8 +14,24 @@ DoorDash / Uber Eats tab ── attach (scroll, redact, stitch, customer photos)
 
 1. `npm install && npm run build`, then in Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → `dist/`.
 2. Open an order, click the KoreFi icon on that tab. The first time, open the sidebar → **Settings** → **Connection**: agent URL, access token, your name or ID.
-3. **+** attaches the order. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
+3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
+   work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+
+## What changed in v0.10.2: screenshots no longer depend on clicking the icon
+
+- **The bug.** Chrome takes a screenshot of a tab only if the extension has `activeTab` (granted by clicking its toolbar icon on
+  that tab) or `<all_urls>`. Access to doordash.com and ubereats.com does not count. `activeTab` is lost when the tab reloads, when
+  the extension is updated, and it is never granted when the panel is opened another way (pinned, or carried over from another tab).
+  The page text was still read, so the order showed up, but the screenshot failed with "click the KoreFi icon".
+- **Why tests missed it.** The test build gave itself `<all_urls>` up front, so it never ran without the grant.
+- **The fix.** The first tap on **+** asks Chrome once for `<all_urls>` (an optional permission, so installing shows no new
+  warning). After that, screenshots work on any order tab, after reloads and updates. If the user declines, the old click-the-icon
+  route still works and the note says how to allow it. Nothing else changes: capture still only happens on a tap of +, on the tab
+  on screen, and redaction still fails closed.
+- **New test** `e2e/access.mjs` installs the extension as a user has it (no grant), shows Chrome refusing the screenshot, and checks
+  that + asks for access, that declining explains itself, and that Chrome accepts the request (it fails if the manifest does not
+  declare `<all_urls>`).
 
 ## What changed in v0.10: Uber Eats, and customer photos on both platforms
 

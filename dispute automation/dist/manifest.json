@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KoreFi Dispute Assistant",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Ask KoreFi about the DoorDash or Uber Eats order on screen: it checks the evidence, suggests whether to dispute, and drafts the response.",
   "permissions": [
     "sidePanel",
@@ -16,6 +16,7 @@
     "https://korefi-pi-dispute-agent.onrender.com/*"
   ],
   "optional_host_permissions": [
+    "<all_urls>",
     "https://*/*",
     "http://localhost/*",
     "http://127.0.0.1/*"

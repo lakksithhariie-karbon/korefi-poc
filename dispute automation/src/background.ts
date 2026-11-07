@@ -3,7 +3,8 @@ import { assessRules } from './shared/rules.ts';
 import { upsertCase } from './shared/storage.ts';
 import type { CaptureContext, CaseRecord, FramePayload, PagePayload, PhotoFrame, Rect, RuntimeMessage } from './shared/types.ts';
 
-// Clicking the icon opens the panel and, through activeTab, lets us read and screenshot this tab until it navigates away.
+// Clicking the icon opens the panel. Chrome screenshots a tab only with activeTab (granted by this click, lost when the
+// tab reloads or the extension updates) or <all_urls>, which the panel asks for once, the first time + is tapped.
 chrome.action.onClicked.addListener((tab) => {
   if (tab.id !== undefined) void chrome.sidePanel.open({ tabId: tab.id });
 });
@@ -48,7 +49,7 @@ async function capture(tabId: number): Promise<void> {
     context = await askPage<CaptureContext | null>(tabId, { type: 'GET_CAPTURE_CONTEXT' });
   } catch {
     const host = tab.url ? ` (${new URL(tab.url).hostname})` : '';
-    return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the order tab, then try again.`);
+    return fail(`Could not read this tab${host}. ${NEEDS_ACCESS}`);
   }
 
   // A page the parser does not understand is still worth investigating: use what the page revealed, without personal details.
@@ -88,6 +89,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const withheld = (why: string) => ({ image: null, note: `No screenshot: ${why}` });
 const CANNOT_HIDE = 'the customer’s details could not be found to hide, so only the page text was kept.';
+const NEEDS_ACCESS = 'Chrome has not let KoreFi see this tab yet. Tap + and choose Allow when Chrome asks.';
 
 /**
  * Scrolls the order sheet one screen at a time, screenshots each screen, blacks out personal details in each one,
@@ -138,7 +140,7 @@ async function takeRedactedScreenshot(tab: chrome.tabs.Tab): Promise<{ image: st
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/activeTab|all_urls|cannot access/i.test(msg)) {
-      return { image: null, note: 'No screenshot: click the KoreFi icon in the toolbar on this tab once, then capture again.' };
+      return { image: null, note: `No screenshot. ${NEEDS_ACCESS}` };
     }
     return { image: null, note: `No screenshot: ${msg}` };
   } finally {

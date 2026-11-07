@@ -241,8 +241,19 @@
     },60000);
   }
   function endCapture(){captureBusy=false;clearTimeout(captureTimer);captureTimer=null;updateSend();}
-  async function capture(){
+  // Screenshots need Chrome's <all_urls> grant (or a fresh toolbar click on that tab). Asked once, from the + tap.
+  const SEE_TABS={origins:['<all_urls>']};
+  let canSeeTabs=false,askingAccess=false;
+  const checkTabAccess=()=>chrome.permissions.contains(SEE_TABS).then(v=>{canSeeTabs=v;},()=>{canSeeTabs=false;});
+  function onCaptureClick(){
+    if(captureBusy||busy||askingAccess)return;
+    // Chrome shows its prompt only during a click, so ask before anything awaits.
+    const asked=canSeeTabs?null:chrome.permissions.request(SEE_TABS).catch(()=>false);
+    void capture(asked);
+  }
+  async function capture(asked=null){
     if(captureBusy||busy)return;
+    if(asked){askingAccess=true;try{canSeeTabs=await asked;}finally{askingAccess=false;}}
     let tab;
     try{[tab]=await chrome.tabs.query({active:true,currentWindow:true});}
     catch{toast('Could not reach this tab. Open the order and try again');return;}
@@ -702,7 +713,9 @@
   $('closeEvidence').addEventListener('click',closeSheet);
   $('saveSettings').addEventListener('click',()=>void saveSettings());
   document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',()=>theme(b.dataset.themeChoice,true)));
-  $('capture').addEventListener('click',()=>void capture());
+  $('capture').addEventListener('click',onCaptureClick);
+  chrome.permissions.onAdded.addListener(()=>void checkTabAccess());
+  chrome.permissions.onRemoved.addListener(()=>void checkTabAccess());
   $('removeAttachment').addEventListener('click',removeAttachment);
   $('saveMeta').addEventListener('click',()=>void saveCaseMeta());
   $('orderChip').addEventListener('click',()=>{if(!current||isPlaceholder(current))return;metaOpen=!metaOpen;caseMetaUI();if(metaOpen)$('metaStore').focus();});
@@ -741,7 +754,7 @@
     const data=await chrome.storage.local.get(['settings','cases']);
     settings={...settings,...(data.settings||{})};
     delete settings.apiKey;delete settings.loggingToken;delete settings.loggingUrl;delete settings.model;
-    theme(settings.theme);connectionUI();if(ready())void wake();
+    theme(settings.theme);connectionUI();if(ready())void wake();void checkTabAccess();
     const cases=Array.isArray(data.cases)?data.cases:[];
     if(cases.length){
       const latest=cases[0];

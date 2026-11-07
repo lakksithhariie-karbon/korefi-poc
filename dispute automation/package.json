@@ -1,6 +1,6 @@
 {
   "name": "korefi-dispute-assistant",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "private": true,
   "type": "module",
   "description": "Chrome side panel for DoorDash and Uber Eats disputes: redacted full-order capture with customer photos, agent chats, editable dispute draft, and operator-confirmed filing log.",
@@ -8,7 +8,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/ && npm --prefix agent-backend test",
-    "e2e": "PLAYWRIGHT_BROWSERS_PATH=$PWD/.browsers node e2e/run.mjs"
+    "e2e": "PLAYWRIGHT_BROWSERS_PATH=$PWD/.browsers node e2e/run.mjs && PLAYWRIGHT_BROWSERS_PATH=$PWD/.browsers node e2e/access.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

@@ -309,7 +309,7 @@
       context = await askPage(tabId, { type: "GET_CAPTURE_CONTEXT" });
     } catch {
       const host = tab.url ? ` (${new URL(tab.url).hostname})` : "";
-      return fail(`Could not read this tab${host}. Click the KoreFi icon in the toolbar on the order tab, then try again.`);
+      return fail(`Could not read this tab${host}. ${NEEDS_ACCESS}`);
     }
     const platform = payload?.platform ?? context?.platform ?? "doordash";
     const orderId = payload?.snapshot.orderId || context?.orderId || `SCREENSHOT-${Date.now().toString(36).toUpperCase()}`;
@@ -343,6 +343,7 @@
   var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   var withheld = (why) => ({ image: null, note: `No screenshot: ${why}` });
   var CANNOT_HIDE = "the customer\u2019s details could not be found to hide, so only the page text was kept.";
+  var NEEDS_ACCESS = "Chrome has not let KoreFi see this tab yet. Tap + and choose Allow when Chrome asks.";
   async function takeRedactedScreenshot(tab) {
     if (!tab.active || tab.id === void 0 || tab.windowId === void 0) {
       return { image: null, note: "No screenshot: the order tab is not the active tab. Switch to it and capture again." };
@@ -381,7 +382,7 @@
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (/activeTab|all_urls|cannot access/i.test(msg)) {
-        return { image: null, note: "No screenshot: click the KoreFi icon in the toolbar on this tab once, then capture again." };
+        return { image: null, note: `No screenshot. ${NEEDS_ACCESS}` };
       }
       return { image: null, note: `No screenshot: ${msg}` };
     } finally {
