@@ -18,6 +18,16 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
 
+## Backend 0.8.0: Muse Ember, and a careful look at every customer photo
+- The agent runs on Meta's Muse Ember (`meta/muse-ember`, same price as Claude Haiku 5.5), through Pi 1.5.2 (1.5.0 did
+  not know the model). Set by `AI_MODEL` on Render; `AI_MODEL=anthropic/claude-haiku-5.5` switches back.
+- Why: on order 5BB09581 the customer's photo shows a hair on the inside of the box lid. Inside the full agent, Haiku
+  missed it in 3 of 3 runs; Muse Ember found it in 3 of 3. One photo, so a small sample.
+- New instructions: check each customer photo part by part (food, container, inside of the lid, sachets, background);
+  "I could not spot it" is the most it may say about something it did not see; an object outside the food points to the
+  playbook's "Foreign Object Not From Kitchen" argument; never guess anyone's gender from a name.
+- With these, Muse Ember found the hair and recommended dispute in 3 of 3 runs on that order.
+
 ## v0.12.1: DoorDash customer photos at full size
 - DoorDash shows the customer's photo as a 72px thumbnail under "left a comment", through its resizing proxy
   (`img.cdn4dd.com/cdn-cgi/image/fit=cover,width=72,height=72,…/<original>`). The link inside is the original photo on

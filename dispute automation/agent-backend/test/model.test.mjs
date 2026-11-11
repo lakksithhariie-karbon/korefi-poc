@@ -6,19 +6,30 @@ import { INSTRUCTIONS } from '../src/agent.mjs';
 import { modelConfig } from '../src/constants.mjs';
 import { buildPrompt } from '../src/prompt.mjs';
 
-test('the Vercel AI Gateway key picks Claude Haiku 5.5; without it the service keeps using OpenAI', () => {
-  assert.deepEqual(modelConfig({ AI_GATEWAY_API_KEY: 'k', OPENAI_API_KEY: 'sk' }), { provider: 'vercel-ai-gateway', id: 'anthropic/claude-haiku-5.5' });
+test('the Vercel AI Gateway key picks Muse Ember; without it the service keeps using OpenAI', () => {
+  assert.deepEqual(modelConfig({ AI_GATEWAY_API_KEY: 'k', OPENAI_API_KEY: 'sk' }), { provider: 'vercel-ai-gateway', id: 'meta/muse-ember' });
+  assert.deepEqual(modelConfig({ AI_GATEWAY_API_KEY: 'k', AI_MODEL: 'anthropic/claude-haiku-5.5' }), { provider: 'vercel-ai-gateway', id: 'anthropic/claude-haiku-5.5' });
   assert.deepEqual(modelConfig({ AI_GATEWAY_API_KEY: 'k', AI_MODEL: 'anthropic/claude-sonnet-5.5' }), { provider: 'vercel-ai-gateway', id: 'anthropic/claude-sonnet-5.5' });
   assert.deepEqual(modelConfig({ OPENAI_API_KEY: 'sk', OPENAI_MODEL: 'gpt-6-luna' }), { provider: 'openai', id: 'gpt-6-luna' });
   assert.equal(modelConfig({}), null);
 });
 
-test('Pi knows Claude Haiku 5.5 on the gateway, and that it reads images', () => {
+test('Pi knows Muse Ember and Claude Haiku 5.5 on the gateway, and that both read images', () => {
   const models = createModels();
   models.setProvider(vercelAIGatewayProvider());
-  const m = models.getModel('vercel-ai-gateway', 'anthropic/claude-haiku-5.5');
-  assert.ok(m, 'model in the catalog');
-  assert.ok(m.input.includes('image'));
+  for (const id of ['meta/muse-ember', 'anthropic/claude-haiku-5.5']) {
+    const m = models.getModel('vercel-ai-gateway', id);
+    assert.ok(m, `${id} in the catalog`);
+    assert.ok(m.input.includes('image'), id);
+  }
+});
+
+test('the agent checks every customer photo part by part and never guesses gender', () => {
+  assert.match(INSTRUCTIONS, /CHECK EVERY CUSTOMER PHOTO BEFORE YOU DECIDE/);
+  assert.match(INSTRUCTIONS, /the inside of the lid/);
+  assert.match(INSTRUCTIONS, /never write that the photo does not support or disproves the claim because you did not spot something/);
+  assert.match(INSTRUCTIONS, /A foreign object on the lid, the packaging or outside the food points to the playbook's Foreign Object Not From Kitchen argument/);
+  assert.match(INSTRUCTIONS, /Never guess anyone's gender from a name/);
 });
 
 test('the agent is told to win back money, never to make up facts, and to learn from past disputes', () => {

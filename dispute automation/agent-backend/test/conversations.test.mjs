@@ -336,7 +336,7 @@ test('the agent is ready with only the Vercel AI Gateway key, and health shows t
   const s = await start({ env: { OPENAI_API_KEY: '', AI_GATEWAY_API_KEY: 'vck-test' } });
   try {
     const h = await s.json('GET', '/healthz');
-    assert.equal(h.model, 'anthropic/claude-haiku-5.5');
+    assert.equal(h.model, 'meta/muse-ember');
     const c = await open(s);
     const sent = await s.call('POST', `/v1/conversations/${c.conversation_id}/messages`, { operator_id: 'ops-1', text: 'Can we dispute?' });
     assert.equal(sent.status, 202);

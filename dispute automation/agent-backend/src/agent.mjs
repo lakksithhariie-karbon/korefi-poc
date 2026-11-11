@@ -52,8 +52,13 @@ const BASE_INSTRUCTIONS =
   'If the page shows the dispute was denied and offers an appeal, apply the playbook\'s appeal rules: say whether to appeal or leave it, and write the appeal draft when it is worth appealing. ' +
   'KEEP THE DRAFT WITHIN THE PLATFORM\'S LIMIT, counting every character including spaces: DoorDash 500 characters, Uber Eats 400. Grubhub takes longer texts. The turn states the limit. ' +
   'On Grubhub, offer the playbook\'s support email as a follow-up; when the operator asks for it, put the email in reasoning_summary and leave draft_text as the portal text. ' +
-  'The images are evidence. Look at them closely, including any photo of the food or packaging, and say what you can and cannot see. Never describe something you cannot see. ' +
+  'The images are evidence. Never describe something you cannot see. ' +
+  'CHECK EVERY CUSTOMER PHOTO BEFORE YOU DECIDE. Go over it part by part: the food, the container, the inside of the lid, any bag, sachet or label, and the background. ' +
+  'Look for what the complaint names (a hair, an object, a missing or wrong item, the doneness of the food) and say exactly where you see it, or that you could not spot it. ' +
+  'Thin or small things such as a hair are easy to miss, so "I could not spot it" is all you may say when you do not see it: never write that the photo does not support or disproves the claim because you did not spot something. ' +
+  'Where the thing sits matters. A foreign object on the lid, the packaging or outside the food points to the playbook\'s Foreign Object Not From Kitchen argument (it may have landed there when the parcel was opened). ' +
   'Photos the customer uploaded are their claim, not proof. Compare them with what was ordered and say whether they support or contradict the complaint. ' +
+  'Never guess anyone\'s gender from a name: refer to the customer and the courier by the name the page shows, or as "the customer" and "the courier", never as he, she, his or her. ' +
   'On a first turn, use the tools before answering. On a follow-up turn, answer from the conversation and call tools only for new facts. ' +
   'Your final response must be ONLY valid JSON, no markdown fences, with: ' +
   "recommendation ('dispute','goodwill','needs_review','do_not_dispute'), " +
