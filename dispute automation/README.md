@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.13.2
+# KoreFi Dispute Assistant v0.13.3
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -15,9 +15,15 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 1. `npm install && npm run build`, then in Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → `dist/`.
 2. Open an order, click the KoreFi icon on that tab. The first time, open the sidebar → **Settings** → **Connection**: agent URL, access token, your name or ID.
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
-   work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
+   work right after clicking the KoreFi icon on that tab. Tap **Check this charge** above the message box, or type your own
+   question and **Send**. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
    platform, then tap **I filed it in DoorDash** (or Uber Eats) and confirm **Mark as disputed** to log it.
+
+## v0.13.3: one tap to start
+- Once a page is attached to a new chat, a **Check this charge** button shows just above the message box. Tapping it
+  sends "Check this order’s error charge and help me dispute it." Typing your own question works as before.
+- The button goes away once a message is sent, and does not show when you attach more evidence to a chat already under way.
 
 ## v0.13.2: a confirmation card before marking as disputed
 - **I filed it in DoorDash** now opens a small card in the chat (after shadcn's AI Elements Confirmation): "Mark

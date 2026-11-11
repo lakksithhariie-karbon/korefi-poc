@@ -112,7 +112,7 @@
     conversationId=null;analysis=null;draftText='';draftCopied=false;copiedText='';filing=null;attachedCase=null;attached=false;metaOpen=false;
     $thread.replaceChildren();$thread.classList.remove('filed');$('evidenceBody').replaceChildren();
     hide('empty',false);hide('thread');hide('progress');hide('suggestions');hide('attachment');
-    hide('filingState');hide('caseMeta');closeSheet();
+    hide('filingState');hide('caseMeta');hide('starter');closeSheet();
     $('capture').classList.remove('captured');$prompt.value='';$prompt.style.height='';
   }
   function newChat(){
@@ -198,12 +198,15 @@
       hide('attachment');$('capture').classList.remove('captured');
     }
     $prompt.placeholder=attached?'Ask about this page':'Ask about this order';
-    orderUI();updateSend();
+    orderUI();updateSend();showStarter();
   }
   function removeAttachment(){
     attachedCase=null;attached=false;hide('attachment');$('capture').classList.remove('captured');
-    $prompt.placeholder='Ask about this order';updateSend();
+    $prompt.placeholder='Ask about this order';updateSend();showStarter();
   }
+  // A page attached to a new chat gets a one-tap start. Typing a question works as well.
+  const STARTER_TEXT='Check this order’s error charge and help me dispute it.';
+  function showStarter(){hide('starter',!(attached&&!conversationId&&!analysis&&!filing&&!busy));}
   async function allCases(){const r=await chrome.storage.local.get('cases');return Array.isArray(r.cases)?r.cases:[];}
   async function getCase(id){return (await allCases()).find(c=>c.id===id)||null;}
   async function patchCase(id,patch){
@@ -525,7 +528,7 @@
   async function run(question){
     if(!current||busy)return;
     const caseId=current.id;
-    busy=true;updateSend();showThread();hide('suggestions');toast('');startProgress();
+    busy=true;updateSend();showThread();hide('suggestions');hide('starter');toast('');startProgress();
     try{
       const result=await callPi(question);
       if(current?.id!==caseId)return;
@@ -533,7 +536,7 @@
       awakeAt=Date.now();
       await patchCase(caseId,{assessment:result,conversationId,agentStoreId:result.store_id&&result.store_id!=='unresolved'?result.store_id:(current.storeId||null)}).catch(()=>{});
     }catch(e){stopProgress();addAssistant(String(e.message||e),true);}
-    finally{busy=false;updateSend();stopProgress();scrollMain();}
+    finally{busy=false;updateSend();stopProgress();showStarter();scrollMain();}
   }
   async function send(forced){
     if(busy||captureBusy)return;
@@ -807,6 +810,7 @@
   chrome.permissions.onAdded.addListener(()=>void checkTabAccess());
   chrome.permissions.onRemoved.addListener(()=>void checkTabAccess());
   $('removeAttachment').addEventListener('click',removeAttachment);
+  $('starterButton').addEventListener('click',()=>void send(STARTER_TEXT));
   $('saveMeta').addEventListener('click',()=>void saveCaseMeta());
   $('orderChip').addEventListener('click',()=>{if(!current||isPlaceholder(current))return;metaOpen=!metaOpen;caseMetaUI();if(metaOpen)$('metaStore').focus();});
   $('viewAttachment').addEventListener('click',()=>openLightbox(attachedCase?.image));

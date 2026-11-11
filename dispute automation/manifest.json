@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "KoreFi Dispute Assistant",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "description": "Ask KoreFi about the DoorDash or Uber Eats order on screen: it checks the evidence, suggests whether to dispute, and drafts the response.",
   "permissions": [
     "sidePanel",

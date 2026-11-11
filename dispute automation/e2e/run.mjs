@@ -360,8 +360,11 @@ try {
   panel.on('request', (r) => { if (r.method() === 'POST' && r.url().includes(`:${piPort}/`)) pi.bodies.push({ url: new URL(r.url()).pathname, raw: r.postData() || '', key: r.headers()['idempotency-key'] || null }); });
   await panel.waitForSelector('#attachment:not([hidden])');
   check('screenshot is attached to the composer', true);
+  check('a new chat with a page attached offers "Check this charge"', (await panel.locator('#starter').isVisible()) && (await panel.locator('#starterButton').innerText()) === 'Check this charge');
+  await panel.screenshot({ path: path.join(out, 'panel-starter.png') });
   await panel.fill('#prompt', 'Can we dispute this?');
   await panel.press('#prompt', 'Enter');
+  check('the button goes away once a question is sent', await panel.locator('#starter').isHidden());
   check('the waiting line shimmers, with no dots', (await panel.locator('#progress .shimmer').innerText().catch(() => '')) === 'Looking into it…' && (await panel.locator('#progress .dots').count()) === 0);
   check('the shimmer is a moving text gradient', await panel.evaluate(() => { const s = getComputedStyle(document.querySelector('#progress .shimmer')); return s.animationName === 'shimmer' && /gradient/.test(s.backgroundImage) && s.backgroundClip === 'text'; }));
   const answer1 = await waitFor(async () => {
@@ -410,6 +413,7 @@ try {
   check('a second capture of the same order is taken', !!c1b);
   await panel.waitForSelector('#attachment:not([hidden])');
   check('the chat is kept when more evidence is captured', (await panel.locator('.agent-message').count()) >= 2 && store.conversations.length === 1);
+  check('a chat already under way does not offer "Check this charge"', await panel.locator('#starter').isHidden());
   await panel.fill('#prompt', 'Here is another look at the order');
   await panel.press('#prompt', 'Enter');
   await waitFor(() => agentCalls.length > 2, 40000);
@@ -482,8 +486,8 @@ try {
   check('unknown layout screenshot is taken with no black boxes', !!c2?.image && (await inspect(c2.image)).bands === 0, String(c2?.imageNote));
   check('unknown layout text keeps the names', !!c2 && /Pat Q/.test(c2.redactedText) && /Lee R/.test(c2.redactedText));
   await panel.waitForSelector('#attachment:not([hidden])');
-  await panel.fill('#prompt', 'Check this one');
-  await panel.press('#prompt', 'Enter');
+  await panel.click('#starterButton');
+  check('"Check this charge" sends its message', await waitFor(async () => (await panel.locator('.user-bubble .chat-text').last().innerText().catch(() => '')) === 'Check this order’s error charge and help me dispute it.') !== null && await panel.locator('#starter').isHidden());
   await waitFor(() => agentCalls.length > 3, 40000);
   check('a second chat is opened with the known store ID', store.conversations.length === 2 && agentCalls[3].request.storeId === '555123');
   check('the second chat starts a fresh conversation', agentCalls[3].transcript.length === 0);
