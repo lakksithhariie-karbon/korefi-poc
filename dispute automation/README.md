@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.12.1
+# KoreFi Dispute Assistant v0.13.0
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -16,7 +16,16 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 2. Open an order, click the KoreFi icon on that tab. The first time, open the sidebar → **Settings** → **Connection**: agent URL, access token, your name or ID.
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
-4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
+   platform, then tap **I filed it in DoorDash** (or Uber Eats) to log it.
+
+## v0.13.0: the draft in the chat
+- The draft now shows right under the agent's answer, in a block labelled "DoorDash draft" (or "Uber Eats draft") with
+  **Edit** and **Copy** buttons. The separate Draft screen is gone.
+- **Edit** opens the text in place; **Done** closes it. The edit is what the agent sees as your draft on the next message.
+- **I filed it in DoorDash** logs the filing straight away, with no second confirm. It records the last draft you
+  copied, or the newest draft if you never copied one. After that, Edit is hidden.
+- To get a new draft, ask in the chat (for example "make the draft shorter"); it comes back as a new block.
 
 ## Backend 0.8.0: Muse Ember, and a careful look at every customer photo
 - The agent runs on Meta's Muse Ember (`meta/muse-ember`, same price as Claude Haiku 5.5), through Pi 1.5.2 (1.5.0 did

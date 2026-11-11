@@ -409,16 +409,27 @@ try {
   check('the agent sees old and new images together', agentCalls[2]?.images.length === store.images.length && store.images.length > imagesBefore);
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 3);
 
-  // 5. Draft, copy, confirm: logged against the chat, with no store ID.
-  await panel.locator('[data-open="draft"]').last().click();
-  await panel.click('#copyDraft');
-  await panel.waitForSelector('#confirm:not([hidden])');
+  // 5. The draft sits in the chat: copy it, edit it in place, then the "I filed it" chip logs it against the chat, with no store ID.
+  const block = panel.locator('.agent-message .draft-block').last();
+  check('the draft shows in the chat, with no Draft drawer', (await block.locator('.draft-body').innerText()).includes('we dispute the charge') &&
+    (await panel.locator('#draftView, [data-open="draft"]').count()) === 0);
+  check('the draft block is labelled with the platform', /DoorDash draft/.test(await block.locator('.draft-head').innerText()));
+  await block.locator('.draft-copy').click();
+  check('draft copied to clipboard', /we dispute the charge/.test(await panel.evaluate(() => window.__copied || '')));
+  await block.locator('.draft-edit').click();
+  await block.locator('.draft-input').press('End');
+  await block.locator('.draft-input').pressSequentially(' Edited by ops.');
+  await block.locator('.draft-edit').click();
+  check('an edit shows in the block', (await block.locator('.draft-body').innerText()).endsWith('Edited by ops.'));
+  await block.locator('.draft-copy').click();
+  check('copy takes the edited text', /Edited by ops\.$/.test(await panel.evaluate(() => window.__copied || '')));
   await panel.waitForTimeout(400);
   await panel.screenshot({ path: path.join(out, 'panel-draft.png') });
-  check('draft copied to clipboard', /we dispute the charge/.test(await panel.evaluate(() => window.__copied || '')));
-  await panel.click('#yesFiled');
+  await panel.locator('#suggestions button', { hasText: 'I filed it in DoorDash' }).click();
   const logged = await waitFor(async () => (await panel.locator('#filingTitle').innerText().catch(() => '')).includes('Marked as disputed'));
   check('filing is logged against the chat without a store ID', !!logged && store.submissions.length === 1 && store.conversations[0].status === 'disputed', JSON.stringify(store.submissions.length));
+  check('the filed text is the copied, edited draft', /Edited by ops\.$/.test(store.submissions[0]?.disputeText || ''), store.submissions[0]?.disputeText);
+  check('a filed draft can no longer be edited', !(await block.locator('.draft-edit').isVisible()));
   check('the chat notes that it was marked disputed', store.messages.some((m) => m.role === 'system' && /Marked as disputed/.test(m.text)));
 
   // 6. Reopen the panel: the chat comes back from the server, evidence images included. History lists it.

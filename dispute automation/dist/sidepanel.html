@@ -26,6 +26,11 @@
       <section class="thread" id="thread" aria-label="Chat" aria-live="polite" hidden></section>
       <div class="thinking" id="progress" role="status" aria-live="polite" hidden></div>
       <div class="suggestions" id="suggestions" hidden></div>
+      <div class="callout filing-state" id="filingState" role="status" hidden>
+        <strong id="filingTitle"></strong>
+        <p id="filingDescription"></p>
+        <button class="button" id="retrySync" type="button" hidden>Try saving again</button>
+      </div>
     </main>
 
     <footer class="composer-wrap">
@@ -80,34 +85,6 @@
         </button>
       </div>
     </aside>
-
-    <section class="sheet" id="draftView" aria-labelledby="draftHeading" hidden>
-      <div class="sheet-head">
-        <button class="icon-button" id="closeDraft" type="button" aria-label="Back to chat" title="Back">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-        </button>
-        <h2 id="draftHeading">Dispute draft</h2>
-      </div>
-      <div class="sheet-body">
-        <p class="lead" id="draftLead">Check every claim, then submit it on the platform yourself.</p>
-        <textarea id="draftText" class="draft-area" aria-label="Dispute draft" placeholder="No draft yet" rows="12"></textarea>
-        <div class="row">
-          <button class="button primary" id="copyDraft" type="button">Copy draft</button>
-          <button class="button" id="regenerateDraft" type="button">Write a new draft</button>
-        </div>
-        <div class="callout" id="confirm" hidden>
-          <strong id="confirmTitle">Did you submit this on the platform?</strong>
-          <p id="confirmText">Confirm only after the platform accepts it. KoreFi records it, it does not submit anything.</p>
-          <div class="row"><button class="button" id="notYet" type="button">Not yet</button><button class="button primary" id="yesFiled" type="button">Yes, mark as disputed</button></div>
-        </div>
-        <div class="callout" id="filingState" role="status" hidden>
-          <strong id="filingTitle"></strong>
-          <p id="filingDescription"></p>
-          <button class="button" id="retrySync" type="button" hidden>Try saving again</button>
-        </div>
-        <p class="hint" id="draftHint"></p>
-      </div>
-    </section>
 
     <section class="sheet" id="evidenceView" aria-labelledby="evidenceHeading" hidden>
       <div class="sheet-head">

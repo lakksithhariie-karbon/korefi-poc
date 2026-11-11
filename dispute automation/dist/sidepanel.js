@@ -34,7 +34,7 @@
   const ICONS = {
     copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
     check:'<path d="M20 6 9 17l-5-5"/>',
-    draft:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    edit:'<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>',
     sources:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>'
   };
   const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -89,10 +89,9 @@
     else{$('scrim').classList.remove('open');setTimeout(()=>{if(!drawerOpen())hide('scrim');},200);$('historyButton').focus();}
   }
   function openSheet(name){
-    const ids={draft:'draftView',evidence:'evidenceView',settings:'settingsPanel'};
+    const ids={evidence:'evidenceView',settings:'settingsPanel'};
     for(const [k,id] of Object.entries(ids))hide(id,k!==name);
     sheet=name;
-    if(name==='draft')renderDraft();
     if(name==='evidence')renderEvidence();
     if(name==='settings'){
       $('agentUrl').value=settings.agentUrl||API;$('agentToken').value=settings.agentToken||'';$('operatorId').value=settings.operatorId||'poc-operator';
@@ -103,15 +102,15 @@
   }
   function closeSheet(){
     if(!sheet)return;
-    hide('draftView');hide('evidenceView');hide('settingsPanel');sheet=null;focusComposer();
+    hide('evidenceView');hide('settingsPanel');sheet=null;focusComposer();
   }
 
   // Everything that belongs to one chat. A new chat, a different order, or an opened conversation all start from here.
   function resetChatState(){
     conversationId=null;analysis=null;draftText='';draftCopied=false;copiedText='';filing=null;attachedCase=null;attached=false;metaOpen=false;
-    $thread.replaceChildren();$('evidenceBody').replaceChildren();$('draftText').value='';
+    $thread.replaceChildren();$thread.classList.remove('filed');$('evidenceBody').replaceChildren();
     hide('empty',false);hide('thread');hide('progress');hide('suggestions');hide('attachment');
-    hide('confirm');hide('filingState');hide('caseMeta');closeSheet();
+    hide('filingState');hide('caseMeta');closeSheet();
     $('capture').classList.remove('captured');$prompt.value='';$prompt.style.height='';
   }
   function newChat(){
@@ -427,7 +426,7 @@
   function showSuggestions(result){
     const asked=(result?.suggested_followups||[]).filter(Boolean).slice(0,3);
     const chips=(asked.length?asked:DEFAULT_FOLLOWUPS).map(text=>({text,run:()=>void send(text)}));
-    if(!filing&&draftText.trim())chips.push({text:`I filed it in ${platformName(current)}`,run:()=>openSheet('draft')});
+    if(!filing&&draftText.trim())chips.push({text:`I filed it in ${platformName(current)}`,run:()=>void confirmSubmitted().catch(e=>toast(String(e.message||e)))});
     const el=$('suggestions');el.replaceChildren();
     for(const chip of chips){const b=document.createElement('button');b.type='button';b.textContent=chip.text;
       b.addEventListener('click',chip.run);el.append(b);}
@@ -446,18 +445,49 @@
     const copyBtn=document.createElement('button');copyBtn.type='button';copyBtn.className='icon-button';copyBtn.title='Copy';copyBtn.setAttribute('aria-label','Copy answer');copyBtn.innerHTML=icon('copy');
     copyBtn.addEventListener('click',async()=>{if(await copy(result.reasoning_summary||'')){copyBtn.innerHTML=icon('check');setTimeout(()=>{copyBtn.innerHTML=icon('copy');},1500);}});
     actions.append(copyBtn);
-    if(result.draft_text){const d=document.createElement('button');d.type='button';d.className='text-button';d.dataset.open='draft';d.innerHTML=`${icon('draft')}<span>Draft</span>`;
-      d.addEventListener('click',()=>openSheet('draft'));actions.append(d);}
     const s=document.createElement('button');s.type='button';s.className='text-button';s.dataset.open='evidence';s.innerHTML=`${icon('sources')}<span>Sources</span>`;
     s.addEventListener('click',()=>openSheet('evidence'));actions.append(s);
-    el.append(verdict,p);if(meta.textContent)el.append(meta);el.append(actions);$thread.append(el);
+    el.append(verdict,p);if(result.draft_text)el.append(draftBlock(result.draft_text));
+    if(meta.textContent)el.append(meta);el.append(actions);$thread.append(el);
     return el;
+  }
+  // The draft sits in the chat as a block to copy. Edit changes it in place; the last copied or edited text is what gets filed.
+  function draftBlock(initial){
+    let text=initial;
+    const box=document.createElement('div');box.className='draft-block';
+    const head=document.createElement('div');head.className='draft-head';
+    const label=document.createElement('span');label.textContent=`${platformName(current)} draft`;
+    const edit=document.createElement('button');edit.type='button';edit.className='text-button draft-edit';
+    const copyBtn=document.createElement('button');copyBtn.type='button';copyBtn.className='text-button draft-copy';
+    const editLabel=on=>{edit.innerHTML=on?`${icon('check')}<span>Done</span>`:`${icon('edit')}<span>Edit</span>`;edit.setAttribute('aria-pressed',String(on));};
+    const copyLabel=done=>{copyBtn.innerHTML=done?`${icon('check')}<span>Copied</span>`:`${icon('copy')}<span>Copy</span>`;};
+    editLabel(false);copyLabel(false);
+    const body=document.createElement('div');body.className='draft-body';body.textContent=text;
+    const area=document.createElement('textarea');area.className='draft-input';area.setAttribute('aria-label','Edit draft');area.hidden=true;
+    const fit=()=>{area.style.height='auto';area.style.height=area.scrollHeight+'px';};
+    area.addEventListener('input',()=>{text=area.value;draftText=text;draftCopied=false;copiedText='';fit();});
+    edit.addEventListener('click',()=>{
+      const on=area.hidden;
+      if(on){area.value=text;area.hidden=false;body.hidden=true;fit();area.focus();}
+      else{body.textContent=text;body.hidden=false;area.hidden=true;}
+      editLabel(on);
+    });
+    copyBtn.addEventListener('click',async()=>{
+      if(!text.trim()){toast('There is no draft to copy');return;}
+      if(await copy(text.trim(),`Copied. Submit it in ${platformName(current)}`)){
+        draftText=text;copiedText=text.trim();draftCopied=true;
+        copyLabel(true);setTimeout(()=>copyLabel(false),1500);
+      }
+    });
+    const tools=document.createElement('div');tools.className='draft-tools';tools.append(edit,copyBtn);
+    head.append(label,tools);box.append(head,body,area);
+    return box;
   }
   // The newest answer drives the draft, the sources and the suggested next questions.
   function applyAnalysis(result){
     analysis=result;
     if(result.draft_text && !filing && (!draftText || !draftCopied)){
-      draftText=result.draft_text;$('draftText').value=draftText;draftCopied=false;copiedText='';hide('confirm');
+      draftText=result.draft_text;draftCopied=false;copiedText='';
     }
     showSuggestions(result);scrollMain();
   }
@@ -520,32 +550,9 @@
       const p=document.createElement('p');p.className='lead';p.textContent=analysis.risk_notes;root.append(h,p);
     }
   }
-  function renderDraft(){
-    $('draftText').value=draftText;
-    $('copyDraft').disabled=!draftText.trim();
-    $('regenerateDraft').disabled=!current||busy||!!filing;
-    $('draftText').disabled=!!filing;
-    const where=platformName(current);
-    $('draftLead').textContent=`Check every claim, then submit it in ${where} yourself.`;
-    $('confirmTitle').textContent=`Did you submit this in ${where}?`;
-    $('confirmText').textContent=`Confirm only after ${where} accepts it. KoreFi records it, it does not submit anything.`;
-    $('draftHint').textContent=filing?'':(draftText.trim()?`Check it against ${where} before you copy it.`:'No draft yet. Ask for one, or write a new draft.');
-    if(filing)renderFiling(filing);
-  }
   async function copy(value,message=''){
     try{await navigator.clipboard.writeText(value);if(message)toast(message);return true;}
     catch{toast('Could not copy. Select the text and copy it yourself');return false;}
-  }
-  async function copyDraft(){
-    if(!current||!draftText.trim()){toast('There is no draft yet');return;}
-    const ok=await copy(draftText.trim(),`Copied. Submit it in ${platformName(current)}, then confirm here`);
-    if(ok){draftCopied=true;copiedText=draftText.trim();if(!filing)hide('confirm',false);}
-  }
-  async function regenerateDraft(){
-    if(!current||busy||filing)return;
-    const text=`Write a factual ${platformName(current)} dispute draft from the evidence. Mark anything unsupported with [verify].`;
-    closeSheet();addUser(text);await run(text);
-    if(analysis?.draft_text)openSheet('draft');
   }
   async function syncFiling(record){
     if(!ready())return {state:'pending',error:'Not connected to the agent, so it is saved in this browser only.'};
@@ -566,7 +573,9 @@
   }
   function renderFiling(rec){
     if(!rec?.filing)return;
-    filing=rec;hide('filingState',false);hide('confirm');
+    filing=rec;hide('filingState',false);
+    // A filed draft is final: close any open editor and hide the Edit buttons.
+    $thread.querySelectorAll('.draft-edit[aria-pressed="true"]').forEach(b=>b.click());$thread.classList.add('filed');
     const synced=rec.filing.syncState==='synced';
     $('filingState').classList.toggle('done',synced);
     $('filingTitle').textContent=synced?'Marked as disputed':'Saved in this browser only';
@@ -585,18 +594,19 @@
       renderFiling(updated);
     }finally{syncBusy=false;renderFiling((await getCase(rec.id))||rec);}
   }
+  // The "I filed it" chip records straight away, with the last copied draft (or the newest one if nothing was copied).
   async function confirmSubmitted(){
-    if(!current||!draftCopied||copiedText!==draftText.trim()){toast('Copy the final draft first');return;}
+    const text=(draftCopied&&copiedText)||draftText.trim();
+    if(!current||!text){toast('There is no draft yet');return;}
     if(filing){renderFiling(filing);return;}
     const prior=await findFiling(current);if(prior){filing=prior;renderFiling(prior);return;}
     const duplicate=(await allCases()).find(x=>x.id!==current.id&&x.orderId===current.orderId &&
       x.storeId===current.storeId && x.filing?.confirmedAt && !isPlaceholder(x));
     if(duplicate){filing=duplicate;renderFiling(duplicate);toast('This order is already marked as disputed');return;}
-    const data={confirmedAt:new Date().toISOString(),draft:copiedText,syncState:'pending',syncError:null,lastSyncAttempt:null,backendId:null};
+    const data={confirmedAt:new Date().toISOString(),draft:text,syncState:'pending',syncError:null,lastSyncAttempt:null,backendId:null};
     const rec=await patchCase(current.id,{status:'filed',filing:data,agentStoreId:current.agentStoreId||current.storeId||null});
-    filing=rec;renderFiling(rec);
+    filing=rec;renderFiling(rec);hide('suggestions');scrollMain();
     await pushFiling(rec);
-    renderDraft();hide('suggestions');
   }
 
   // ---- history: every chat on the server, newest first ----
@@ -710,7 +720,6 @@
   $('scrim').addEventListener('click',()=>setDrawer(false));
   $('settingsButton').addEventListener('click',()=>openSheet('settings'));
   $('closeSettings').addEventListener('click',closeSheet);
-  $('closeDraft').addEventListener('click',closeSheet);
   $('closeEvidence').addEventListener('click',closeSheet);
   $('saveSettings').addEventListener('click',()=>void saveSettings());
   document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',()=>theme(b.dataset.themeChoice,true)));
@@ -732,12 +741,6 @@
   $('chatForm').addEventListener('submit',e=>{e.preventDefault();void send();});
   $prompt.addEventListener('input',()=>{$prompt.style.height='auto';$prompt.style.height=Math.min($prompt.scrollHeight,144)+'px';updateSend();});
   $prompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('chatForm').requestSubmit();}});
-  $('draftText').addEventListener('input',()=>{draftText=$('draftText').value;if(draftCopied){draftCopied=false;copiedText='';hide('confirm');toast('Draft changed. Copy it again before confirming');}
-    $('copyDraft').disabled=!draftText.trim();});
-  $('copyDraft').addEventListener('click',()=>void copyDraft());
-  $('regenerateDraft').addEventListener('click',()=>void regenerateDraft());
-  $('notYet').addEventListener('click',()=>{hide('confirm');toast(`Not marked. Submit it in ${platformName(current)} first`);});
-  $('yesFiled').addEventListener('click',()=>void confirmSubmitted().catch(e=>toast(String(e.message||e))));
   $('retrySync').addEventListener('click',()=>{if(filing)void pushFiling(filing);});
   chrome.runtime.onMessage.addListener(message=>{
     if(message?.type==='CASE_CAPTURED'){
