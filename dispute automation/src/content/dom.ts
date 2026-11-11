@@ -10,6 +10,28 @@ const PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-bas
 const PHOTO_CONTEXT = /photo|picture|image|feedback|comment|evidence/i;
 export const MAX_PHOTOS = 3;
 
+// Set by the test build only, so a local server can stand in for DoorDash's photo site.
+declare const TEST_PHOTO_HOST: string | undefined;
+const PHOTO_HOSTS = ['media-platform.cdn4dd.com', ...(typeof TEST_PHOTO_HOST === 'string' && TEST_PHOTO_HOST ? [TEST_PHOTO_HOST] : [])];
+
+/**
+ * The full-size original of a DoorDash customer photo, from the link the page shows. The order sheet shows a 72px
+ * thumbnail through DoorDash's resizing proxy, which wraps the original link:
+ * img.cdn4dd.com/cdn-cgi/image/fit=cover,width=72,height=72,format=auto/https://media-platform.cdn4dd.com/media/cnr_photo_proof/processed/<id>.jpg
+ * Null for any other picture.
+ */
+export function originalPhotoUrl(src: string): string | null {
+  const proxied = src.match(/\/cdn-cgi\/image\/[^/]+\/(https?:\/\/.+)$/);
+  try {
+    const u = new URL(proxied ? proxied[1] : src);
+    return PHOTO_HOSTS.includes(u.hostname) && u.pathname.startsWith('/media/cnr_photo_proof/') ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+const linkOf = (el: HTMLElement): string | null => (el instanceof HTMLImageElement ? originalPhotoUrl(el.currentSrc || el.src) : null);
+
 /** Uber Eats' drawer has no dialog role: climb from the "Order D2D46" heading to the fixed panel that holds it. */
 function panelAroundHeading(heading: RegExp): HTMLElement | null {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
@@ -91,12 +113,17 @@ function isCustomerPhoto(p: Picture): boolean {
   return false;
 }
 
-/** Customer photos on the order, in page order. */
+/** Customer photos on the order, in page order. A DoorDash photo link counts at any size. */
 export function customerPhotos(root: HTMLElement): HTMLElement[] {
   return pictures(root)
-    .filter(isCustomerPhoto)
+    .filter((p) => linkOf(p.el) !== null || isCustomerPhoto(p))
     .slice(0, MAX_PHOTOS)
     .map((p) => p.el);
+}
+
+/** For each customer photo, the link to its full-size original, or null when the page offers none. */
+export function customerPhotoLinks(root: HTMLElement): (string | null)[] {
+  return customerPhotos(root).map(linkOf);
 }
 
 function scrolls(el: HTMLElement, minHeight: number): boolean {

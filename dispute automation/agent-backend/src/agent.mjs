@@ -3,19 +3,31 @@ import { createModels } from '@earendil-works/pi-ai';
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai';
 import { vercelAIGatewayProvider } from '@earendil-works/pi-ai/providers/vercel-ai-gateway';
 import { obj } from '@earendil-works/pi-schema';
-import { PROMPT_VERSION, UNRESOLVED_STORE, modelConfig } from './constants.mjs';
+import { readFileSync } from 'node:fs';
+import { DRAFT_LIMITS, PROMPT_VERSION, UNRESOLVED_STORE, modelConfig } from './constants.mjs';
 import { buildFollowUpPrompt, buildPrompt } from './prompt.mjs';
 import { exportTranscript, isFirstTurn } from './transcript.mjs';
 import { HttpError, parseAgentOutput } from './validation.mjs';
 
-export const INSTRUCTIONS =
+/** The ops team's dispute playbook. Read once at startup and sent with the instructions on every run. */
+export const PLAYBOOK = readFileSync(new URL('../playbook/chargeback-dispute-procedure.md', import.meta.url), 'utf8');
+
+const NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
+
+/** Characters as the operator sees them, so an emoji or accented letter counts once. */
+export const draftLength = (text) => [...String(text || '')].length;
+
+const BASE_INSTRUCTIONS =
   "You are KoreFi's dispute agent for restaurant operations staff. Orders come from DoorDash, Uber Eats or Grubhub; the turn says which. Think of yourself as a coding agent whose codebase is a dispute case: " +
   'investigate with the read-only tools, read the captured order and screenshot, then tell the operator plainly what you found and what to do next. ' +
   'YOUR GOAL IS TO WIN BACK THE STORE\'S MONEY. Dispute every error charge unless the evidence clearly shows the store made the mistake. ' +
   'When you dispute, argue the strongest honest case the evidence supports: the order timeline, what the screenshot and photos show and do not show, ' +
   'what the customer claimed against what was ordered, the courier\'s part, and the customer\'s history shown on the page. ' +
-  'NEVER MAKE UP FACTS. A false claim can get the store flagged. Every statement in the draft must come from the evidence; ' +
-  'anything the operator still has to confirm (a POS ticket, a packing photo, a staff note) goes in as a [verify] placeholder, never as a fact. ' +
+  'FOLLOW THE PLAYBOOK below: its decision framework, the strongest arguments for the error type, its templates, the goodwill path and the appeal rules. ' +
+  'NEVER MAKE UP FACTS. A false claim can get the store flagged. ' +
+  'The store standard practices in the playbook (2-step check, wastage log, quality tests, fresh stock, standardized preparation, hygiene) are confirmed facts for every store: state them plainly, without [verify]. ' +
+  'Everything about this order (items, times, amounts, the customer\'s history, what the photos show) must come from the evidence; ' +
+  'anything else the operator still has to confirm (a POS ticket, a packing photo, a staff note) goes in as a [verify] placeholder, never as a fact. ' +
   'LEARN FROM PAST DISPUTES. find_similar_disputes returns this store\'s earlier KoreFi cases: the dispute that was filed and how it ended. ' +
   'Reuse arguments that won, change the approach where similar disputes were denied, and tell the operator what you learned. A denial is a lesson, not a reason to stop disputing. ' +
   'Write the draft like the store manager wrote it: short, specific and factual, in the first person plural, naming the order, the item and the facts. ' +
@@ -24,7 +36,8 @@ export const INSTRUCTIONS =
   'MISSING HISTORY IS NORMAL. A store with no prior disputes, or a store that could not be identified, still gets a full answer: ' +
   'work from the captured order, the screenshot and the operator\'s question, say that no history was available, and still write the draft. ' +
   'Never refuse or stall because history is empty. ' +
-  'Never invent proof of packing, fulfillment or delivery, dispute eligibility, or a win probability. ' +
+  'Beyond the playbook\'s standard practices, never invent proof of packing, fulfillment or delivery, or dispute eligibility. ' +
+  'The playbook\'s win rates are only for choosing your approach: never give the operator a win rate, a percentage or a chance of winning, and never put one in a draft. ' +
   'Historical adjustment rows are not verified dispute wins, and a credit is not proof of a won dispute. ' +
   'Historic issue frequency is not a win rate; if outcomes are unknown, say they are unknown. ' +
   'Never file anything on the platform. The operator files it. ' +
@@ -32,18 +45,25 @@ export const INSTRUCTIONS =
   'If the dispute route is closed, say so in your first sentence, then fight through the route that is still open and write the draft for it. ' +
   'Never tell the operator to use a Dispute button the page does not show, and never call a closed dispute window open. ' +
   'Recommend dispute whenever there is an honest argument, even with thin evidence: write the draft and list what would make it stronger. ' +
+  'Recommend goodwill when the evidence is on the customer\'s side, as the playbook\'s goodwill path describes (a clear photo of the wrong item, a top or loyal customer, a plausible error with no counter-evidence): ' +
+  'the draft is then a goodwill reversal request that acknowledges the feedback, commits to a process improvement and asks for the reversal without admitting fault. ' +
   'Use needs_review only when one specific piece of evidence the operator can get decides whether to dispute, and still write the draft. ' +
-  'Use do_not_dispute only when the evidence clearly shows the store made the mistake, and say what shows it. ' +
+  'Use do_not_dispute only when neither a dispute nor a goodwill request is worth filing, such as a denied low-value appeal where the store\'s mistake is evident (the playbook\'s "Leave it"), and say why. ' +
+  'If the page shows the dispute was denied and offers an appeal, apply the playbook\'s appeal rules: say whether to appeal or leave it, and write the appeal draft when it is worth appealing. ' +
+  'KEEP THE DRAFT WITHIN THE PLATFORM\'S LIMIT, counting every character including spaces: DoorDash 500 characters, Uber Eats 400. Grubhub takes longer texts. The turn states the limit. ' +
+  'On Grubhub, offer the playbook\'s support email as a follow-up; when the operator asks for it, put the email in reasoning_summary and leave draft_text as the portal text. ' +
   'The images are evidence. Look at them closely, including any photo of the food or packaging, and say what you can and cannot see. Never describe something you cannot see. ' +
   'Photos the customer uploaded are their claim, not proof. Compare them with what was ordered and say whether they support or contradict the complaint. ' +
   'On a first turn, use the tools before answering. On a follow-up turn, answer from the conversation and call tools only for new facts. ' +
   'Your final response must be ONLY valid JSON, no markdown fences, with: ' +
-  "recommendation ('dispute','needs_review','do_not_dispute'), " +
+  "recommendation ('dispute','goodwill','needs_review','do_not_dispute'), " +
   'reasoning_summary (the message the operator reads in chat: plain text, short paragraphs, under 220 words unless asked for more, answering the latest question directly), ' +
   'missing_evidence (array of strings), ' +
   'draft_text (the complete, editable dispute text to paste into the platform\'s dispute form, with [verify] placeholders for anything unproven; if the operator already has a draft, return the full revised draft only when they asked you to change it, otherwise return it unchanged), ' +
   'suggested_followups (up to 4 short questions the operator might ask next, each under 60 characters, chosen for this case), ' +
   'risk_notes (string).';
+
+export const INSTRUCTIONS = BASE_INSTRUCTIONS + '\n\n' + PLAYBOOK;
 
 const NO_STORE_NOTE =
   'The store for this capture is unknown, so no history was searched. This is normal for a first dispute. Work from the captured order, the screenshot and the operator question.';
@@ -207,9 +227,28 @@ export async function investigate({ store, tenant, request, runId, env = process
           })
         : buildPrompt({ ...request, screenshots: attached });
     await agent.prompt(prompt, attached);
-    const last = [...agent.state.messages].reverse().find((m) => m.role === 'assistant' && Array.isArray(m.content));
-    const text = last?.content?.filter((c) => c.type === 'text').map((c) => c.text).join('\n') || '';
-    const out = parseAgentOutput(text);
+    const reply = () => {
+      const last = [...agent.state.messages].reverse().find((m) => m.role === 'assistant' && Array.isArray(m.content));
+      return parseAgentOutput(last?.content?.filter((c) => c.type === 'text').map((c) => c.text).join('\n') || '');
+    };
+    let out = reply();
+    // The platform form cuts or refuses a longer text, so an over-long draft gets one request to shorten it.
+    const limit = DRAFT_LIMITS[platform];
+    if (limit && draftLength(out.draft_text) > limit) {
+      const before = draftLength(out.draft_text);
+      step('agent_draft_too_long', { chars: before, limit });
+      await agent.prompt(
+        `Your draft_text is ${before} characters. The ${NAMES[platform]} dispute form takes at most ${limit} characters, counting spaces. ` +
+          `Return the same JSON with draft_text rewritten to at most ${limit} characters. Keep the strongest arguments and every fact; drop repetition and filler.`,
+      );
+      const shorter = reply();
+      if (shorter.draft_text) out = shorter;
+      const after = draftLength(out.draft_text);
+      step('agent_draft_shortened', { chars: after, limit, fits: after <= limit });
+      if (after > limit) {
+        out.risk_notes = [out.risk_notes, `The draft is ${after} characters, over the ${NAMES[platform]} limit of ${limit}. Shorten it before filing.`].filter(Boolean).join(' ');
+      }
+    }
     if (!toolTrace.length && first) {
       out.risk_notes = [out.risk_notes, 'No database lookup was made for this answer.'].filter(Boolean).join(' ');
     }

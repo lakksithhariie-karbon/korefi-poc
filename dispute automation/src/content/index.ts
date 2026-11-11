@@ -8,6 +8,7 @@ import { detectPlatform } from '../shared/platform.ts';
 import type { CaptureContext, FramePayload, PagePayload, ParsedOrder, PhotoFrame, Platform, RuntimeMessage } from '../shared/types.ts';
 import {
   captureRoot,
+  customerPhotoLinks,
   customerPhotos,
   findOrderRoot,
   findScroller,
@@ -52,6 +53,7 @@ function buildContext(): CaptureContext {
     url: location.href,
     safeText: pageText(text).slice(0, 9000),
     photoCount: customerPhotos(root).length,
+    photoLinks: customerPhotoLinks(root),
     hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null,
   };
 }

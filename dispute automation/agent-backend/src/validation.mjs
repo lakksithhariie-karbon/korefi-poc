@@ -1,3 +1,5 @@
+import { RECOMMENDATIONS } from './constants.mjs';
+
 export class HttpError extends Error {
   constructor(status, message, headers = {}) {
     super(message);
@@ -169,8 +171,6 @@ export function sanitizeConfirm(x) {
     issueCategory: optionalString(x.issue_category, 256),
   };
 }
-
-const RECOMMENDATIONS = ['dispute', 'needs_review', 'do_not_dispute'];
 
 /**
  * Reads the agent's reply. Anything usable is kept: a model that answers in plain text during a follow-up

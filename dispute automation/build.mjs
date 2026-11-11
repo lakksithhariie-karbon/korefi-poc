@@ -7,7 +7,9 @@ const dir = process.env.OUT_DIR || 'dist';
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
 
-const shared = { bundle: true, format: 'iife', platform: 'browser', target: 'chrome120', logLevel: 'info' };
+// The test build lets the mock portal's host stand in for DoorDash's photo site; the release build has no stand-in.
+const photoHost = process.env.TEST_ORIGIN ? new URL(process.env.TEST_ORIGIN).hostname : '';
+const shared = { bundle: true, format: 'iife', platform: 'browser', target: 'chrome120', logLevel: 'info', define: { TEST_PHOTO_HOST: JSON.stringify(photoHost) } };
 await Promise.all([
   build({ ...shared, entryPoints: ['src/background.ts'], outfile: `${dir}/background.js` }),
   build({ ...shared, entryPoints: ['src/content/index.ts'], outfile: `${dir}/content.js` }),

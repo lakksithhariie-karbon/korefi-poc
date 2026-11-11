@@ -2,12 +2,14 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { PROMPT_VERSION, UNRESOLVED_STORE, modelConfig } from './constants.mjs';
 import { HttpError, idParam, readToken, requiredString, sanitizeCapture, sanitizeConfirm, sanitizeConversationStart, sanitizeMessage } from './validation.mjs';
 
+// Answers that come with something for the operator to file: a dispute, or a goodwill request through the same form.
+const FILEABLE = new Set(['dispute', 'goodwill']);
 const MAX_BODY_BYTES = 16 * 1024 * 1024;
 const MAX_CONCURRENT_RUNS = 4;
 // Two captures of a long order with customer photos fit; more than that should be a new chat.
 const MAX_IMAGES_PER_CONVERSATION = 24;
 const DAY_MS = 86_400_000;
-const VERSION = '0.6.1';
+const VERSION = '0.7.0';
 const PLATFORM_NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 
 const sha = (s) => createHash('sha256').update(s).digest();
@@ -183,7 +185,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
     try {
       const result = await withTimeout(investigate({ store, tenant: TENANT, request, runId: id, env, log }), RUN_TIMEOUT_MS, 'The agent took too long. Please try again.');
       await store.completeInvestigation(id, result);
-      await store.setCaseStatus(caseId, result.recommendation === 'dispute' ? 'ready_to_dispute' : 'captured');
+      await store.setCaseStatus(caseId, FILEABLE.has(result.recommendation) ? 'ready_to_dispute' : 'captured');
     } catch (err) {
       log(JSON.stringify({ level: 'error', event: 'investigation_failed', investigation: String(id), message: String(err?.message || err).slice(0, 300) }));
       await store.failInvestigation(id, publicMessage(err)).catch(() => {});
@@ -254,6 +256,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
   function suggestedFollowups(result) {
     const given = (result.suggested_followups || []).filter(Boolean);
     if (given.length) return given.slice(0, 4);
+    if (result.recommendation === 'goodwill') return ['Why goodwill, not a dispute?', 'What would let us dispute?', 'Can you tighten the draft?'];
     return result.recommendation === 'do_not_dispute' ? ['Why not dispute this?', 'What would change your mind?'] : DEFAULT_FOLLOWUPS;
   }
 
@@ -411,7 +414,7 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
       if (next) await store.saveTranscript(conv.id, next);
       await store.touchConversation(conv.id, { lastRecommendation: result.recommendation });
       await store.completeInvestigation(id, result);
-      await store.setCaseStatus(conv.case_id, result.recommendation === 'dispute' ? 'ready_to_dispute' : 'captured');
+      await store.setCaseStatus(conv.case_id, FILEABLE.has(result.recommendation) ? 'ready_to_dispute' : 'captured');
       void audit(conv.case_id, 'agent', result.model || MODEL, 'agent_answered', { conversation_id: String(conv.id), investigation_id: String(id), recommendation: result.recommendation });
     } catch (err) {
       log(JSON.stringify({ level: 'error', event: 'conversation_run_failed', investigation: String(id), conversation: String(conv.id), message: String(err?.message || err).slice(0, 300) }));

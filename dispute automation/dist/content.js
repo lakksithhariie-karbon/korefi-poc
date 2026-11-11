@@ -435,6 +435,17 @@
   var PANELS = '[class*="SidesheetBody"], [class*="SidesheetContent"], [data-baseweb="drawer"], [role="dialog"], [aria-modal="true"]';
   var PHOTO_CONTEXT = /photo|picture|image|feedback|comment|evidence/i;
   var MAX_PHOTOS = 3;
+  var PHOTO_HOSTS = ["media-platform.cdn4dd.com", ..."" ? [""] : []];
+  function originalPhotoUrl(src) {
+    const proxied = src.match(/\/cdn-cgi\/image\/[^/]+\/(https?:\/\/.+)$/);
+    try {
+      const u = new URL(proxied ? proxied[1] : src);
+      return PHOTO_HOSTS.includes(u.hostname) && u.pathname.startsWith("/media/cnr_photo_proof/") ? u.href : null;
+    } catch {
+      return null;
+    }
+  }
+  var linkOf = (el) => el instanceof HTMLImageElement ? originalPhotoUrl(el.currentSrc || el.src) : null;
   function panelAroundHeading(heading) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -499,7 +510,10 @@ ${text}
     return false;
   }
   function customerPhotos(root) {
-    return pictures(root).filter(isCustomerPhoto).slice(0, MAX_PHOTOS).map((p) => p.el);
+    return pictures(root).filter((p) => linkOf(p.el) !== null || isCustomerPhoto(p)).slice(0, MAX_PHOTOS).map((p) => p.el);
+  }
+  function customerPhotoLinks(root) {
+    return customerPhotos(root).map(linkOf);
   }
   function scrolls(el, minHeight) {
     return /(auto|scroll|overlay)/.test(getComputedStyle(el).overflowY) && el.clientHeight >= minHeight && el.scrollHeight > el.clientHeight + 4;
@@ -566,6 +580,7 @@ ${text}
       url: location.href,
       safeText: pageText(text).slice(0, 9e3),
       photoCount: customerPhotos(root).length,
+      photoLinks: customerPhotoLinks(root),
       hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null
     };
   }

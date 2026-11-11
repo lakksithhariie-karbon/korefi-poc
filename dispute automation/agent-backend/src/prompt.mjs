@@ -1,9 +1,17 @@
-import { UNRESOLVED_STORE } from './constants.mjs';
+import { DRAFT_LIMITS, UNRESOLVED_STORE } from './constants.mjs';
 
 const NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 const HISTORY_NOTE = "There are no platform order records to search for this order. The only history is KoreFi's own past cases at this store, from find_similar_disputes. Do not mention other platforms.";
 // A notice that the platform's own dispute route is closed, such as Uber Eats' "can't be disputed" after 30 days.
 const CLOSED = /\b(?:can(?:no|'|’)?t|cannot|can no longer|no longer) be disputed\b|\bdispute (?:window|period) (?:has )?(?:closed|expired|ended)\b/i;
+
+/** The draft length rule for this platform, from the ops playbook. */
+function lengthRule(platform) {
+  const limit = DRAFT_LIMITS[platform];
+  return limit
+    ? 'Draft limit: at most ' + limit + ' characters, counting spaces (the ' + NAMES[platform] + ' dispute form).'
+    : 'Draft limit: ' + NAMES[platform] + ' takes longer texts and has no evidence upload, so put the whole case in the text.';
+}
 
 /** What the page itself says about disputing this charge: a Dispute button, or a notice that disputes are closed. */
 function disputeRoute(request) {
@@ -35,6 +43,7 @@ export function buildPrompt(request) {
     'Reported issue: ' + (request.issueCategory || 'unknown') + '; description: ' + (request.issueDescription || 'none'),
     'Charge: ' + (request.amount ?? 'unknown') + ' USD.',
     ...disputeRoute(request),
+    lengthRule(platform),
     'Operator question: ' + (request.operatorQuestion || 'Provide an initial factual investigation.'),
   ];
   if (request.screenshots.length) {
@@ -74,7 +83,7 @@ export function buildPrompt(request) {
  * carries the new question, anything newly captured, the operator's current draft, and a note about the images.
  */
 export function buildFollowUpPrompt({ question, previousDraft, additionalText, imageCount, storeId, platform = 'doordash' }) {
-  const lines = ['Follow-up from the operator: ' + (question || 'Continue the investigation.'), 'Platform: ' + NAMES[platform] + '.'];
+  const lines = ['Follow-up from the operator: ' + (question || 'Continue the investigation.'), 'Platform: ' + NAMES[platform] + '.', lengthRule(platform)];
   if (storeId === UNRESOLVED_STORE) lines.push('The store is still unknown, so there is no history to search. Work from what you have.');
   if (imageCount) {
     lines.push(

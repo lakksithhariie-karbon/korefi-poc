@@ -5,6 +5,7 @@
 import { execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -36,8 +37,29 @@ const STYLE = `<style>
   .chip{background:#def;border-radius:8px;padding:2px 6px}.sub{color:#666;padding:2px 0}
 </style>`;
 
+/** A solid-colour PNG, for photo files the browser must decode for real (an SVG does not decode in a service worker). */
+function png(w, h, [r, g, b]) {
+  const chunk = (type, data) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(zlib.crc32(Buffer.concat([Buffer.from(type), data])));
+    return Buffer.concat([len, Buffer.from(type), data, crc]);
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(w, 0);
+  head.writeUInt32BE(h, 4);
+  head.set([8, 2, 0, 0, 0], 8);
+  const row = Buffer.concat([Buffer.from([0]), Buffer.alloc(w * 3).map((_, i) => [r, g, b][i % 3])]);
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', head), chunk('IDAT', zlib.deflateSync(Buffer.concat(Array(h).fill(row)))), chunk('IEND', Buffer.alloc(0))]);
+}
+// Like DoorDash: the original photo on the media site, shown in the sheet as a 72px thumbnail through the resizing proxy.
+const ORIGINAL_PHOTO = png(900, 1200, [240, 138, 0]);
+const THUMBNAIL = png(72, 72, [240, 138, 0]);
+const PHOTO_PATH = '/media/cnr_photo_proof/processed/47c0dd33-test.jpg';
+
 /** The order sheet built from the fixture, with the same Customer / Dasher structure as the real page. */
-function orderPage() {
+function orderPage(photo = null) {
   const parts = [];
   for (let i = 0; i < fixture.length; i++) {
     const l = fixture[i];
@@ -53,7 +75,11 @@ function orderPage() {
     } else if (/left a comment$/.test(l)) {
       // The customer's comment, then the photo they uploaded with it.
       parts.push(`<div class="line">${esc(l)}</div><div class="line">${esc(fixture[i + 1])}</div>`);
-      parts.push(`<div class="sub">Customer photo</div><img alt="" src="${PHOTO(200, 150)}" style="width:200px;height:150px;border-radius:6px;display:block">`);
+      parts.push(
+        photo
+          ? `<button style="border:0;padding:0;background:none"><div><img alt="" src="${photo}" style="width:72px;height:72px;border-radius:8px;display:block"></div></button><div class="sub">Photos are available for 30 days.</div>`
+          : `<div class="sub">Customer photo</div><img alt="" src="${PHOTO(200, 150)}" style="width:200px;height:150px;border-radius:6px;display:block">`,
+      );
       i += 1;
     } else {
       parts.push(`<div class="line">${esc(l)}</div>`);
@@ -134,16 +160,25 @@ function uberClosedPage() {
       <div style="overflow:auto;width:100%;padding:16px;box-sizing:border-box">${closedFixture.map((l) => `<div class="line">${esc(l)}</div>`).join('')}</div></div></body></html>`;
 }
 
-const pageFor = (url) => {
+const pageFor = (url, host) => {
   const p = new URL(url, 'http://x').pathname;
+  // The thumbnail's link wraps the original's, as on DoorDash. "/dd-expired" points at an original that is gone.
+  if (p.startsWith('/dd-linked') || p.startsWith('/dd-expired')) {
+    const original = `http://${host}${p.startsWith('/dd-expired') ? PHOTO_PATH.replace('test', 'gone') : PHOTO_PATH}`;
+    return orderPage(`http://${host}/cdn-cgi/image/fit=cover,width=72,height=72,format=auto/${original}`);
+  }
   if (p.startsWith('/ubereats-closed')) return uberClosedPage();
   if (p.startsWith('/ubereats-pickup')) return uberPickupPage();
   return p === '/changed' ? changedPage() : p === '/unknown' ? unknownPage() : p.startsWith('/ubereats') ? uberPage() : orderPage();
 };
 const makePortal = () =>
   http.createServer((req, res) => {
+    const p = new URL(req.url, 'http://x').pathname;
+    if (p === PHOTO_PATH) return res.writeHead(200, { 'content-type': 'image/png' }).end(ORIGINAL_PHOTO);
+    if (p.startsWith('/cdn-cgi/image/')) return res.writeHead(200, { 'content-type': 'image/png' }).end(THUMBNAIL);
+    if (p.startsWith('/media/')) return res.writeHead(404).end();
     res.setHeader('content-type', 'text/html');
-    res.end(pageFor(req.url));
+    res.end(pageFor(req.url, req.headers.host));
   });
 
 // ---- the real backend app over in-memory storage ----
@@ -160,7 +195,8 @@ const backend = createApp({
     if (/FAIL/.test(request.operatorQuestion || '')) throw new Error('internal detail that must not leak');
     const n = agentCalls.length;
     return {
-      recommendation: 'needs_review',
+      // The second answer is a goodwill verdict, so the panel's fourth verdict is seen in a real browser.
+      recommendation: n === 2 ? 'goodwill' : 'needs_review',
       reasoning_summary: `No history for this store. Missing item on order ${request.orderId}; I looked at ${images.length} image(s). Gather the POS ticket.`,
       missing_evidence: ['POS ticket time'],
       draft_text: `Order ${request.orderId}: we dispute the charge. [verify POS ticket time]`,
@@ -357,6 +393,7 @@ try {
   check('follow-up has the images again, without the panel re-uploading them', agentCalls[1]?.images.length === agentCalls[0].images.length && !('screenshots' in JSON.parse(pi.bodies.filter((b) => b.url.endsWith('/messages')).at(-1).raw)));
   check('follow-up carries the operator draft', /we dispute the charge/.test(agentCalls[1]?.request.previousDraft || ''));
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 2);
+  check('a goodwill answer is shown as Goodwill, not refused as incomplete', !!(await waitFor(async () => (await panel.locator('.assessment .big').last().innerText().catch(() => '')) === 'Goodwill', 20000)));
 
   // 4. More evidence mid-chat: capturing the same order again adds to this chat instead of replacing it.
   const imagesBefore = store.images.length;
@@ -535,6 +572,22 @@ try {
   check('the agent is told the charge is $2.00', agentCalls.at(-1).request.amount === 2, String(agentCalls.at(-1).request.amount));
   check('the agent gets the page\'s "can\'t be disputed" notice', /more than 30 days ago can’t be disputed/.test(agentCalls.at(-1).request.redactedText || ''));
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 1);
+
+  // 15. DoorDash shows the customer photo as a 72px thumbnail; the original is downloaded at full size from its link.
+  await panel.click('#newChat');
+  const linked = await context.newPage();
+  await linked.goto(`http://localhost:${portalPort}/dd-linked`);
+  const d = await capture(linked, `http://localhost:${portalPort}/dd-linked*`);
+  const dPhoto = d?.photos?.[0] ? await colours(d.photos[0]) : null;
+  check('DoorDash thumbnail: the full-size original is downloaded, not the 72px thumbnail', d?.photos?.length === 1 && dPhoto?.w === 900 && dPhoto?.h === 1200 && dPhoto.orange > 0.9, JSON.stringify(dPhoto));
+  check('DoorDash thumbnail: the screenshot is still taken', !!d?.image);
+  if (d?.photos?.[0]) writeFileSync(path.join(out, 'doordash-original-photo.jpg'), Buffer.from(d.photos[0].split(',')[1], 'base64'));
+  await panel.click('#newChat');
+  const expired = await context.newPage();
+  await expired.goto(`http://localhost:${portalPort}/dd-expired`);
+  const x = await capture(expired, `http://localhost:${portalPort}/dd-expired*`);
+  const xPhoto = x?.photos?.[0] ? await colours(x.photos[0]) : null;
+  check('DoorDash thumbnail whose original is gone: the thumbnail is cropped from the screen instead', x?.photos?.length === 1 && !!xPhoto && xPhoto.w < 300 && xPhoto.orange > 0.6, JSON.stringify(xPhoto));
 
   await panel.screenshot({ path: path.join(out, 'panel-final.png') });
   await panel.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));

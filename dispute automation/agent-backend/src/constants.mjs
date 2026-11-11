@@ -2,7 +2,13 @@
 export const UNRESOLVED_STORE = 'unresolved';
 
 /** Recorded on every run so an answer can be traced to the instructions that produced it. Bump when the prompt changes. */
-export const PROMPT_VERSION = '2026-11-07.win-2';
+export const PROMPT_VERSION = '2026-11-11.playbook-1';
+
+/** The longest dispute text each platform's form takes, in characters (from the ops playbook). Grubhub takes longer texts. */
+export const DRAFT_LIMITS = { doordash: 500, ubereats: 400 };
+
+/** What the agent may recommend. Goodwill asks for a reversal without disputing, when the evidence is on the customer's side. */
+export const RECOMMENDATIONS = ['dispute', 'goodwill', 'needs_review', 'do_not_dispute'];
 
 /** The tables the chat feature needs. Created by db/migrations/001_conversations.sql, never by the running service. */
 export const CONVERSATION_TABLES = ['conversations', 'conversation_messages', 'conversation_runs', 'conversation_state', 'evidence_images'];

@@ -59,7 +59,7 @@ async function capture(tabId: number): Promise<void> {
   const redactedText = payload?.redactedText ?? context?.safeText ?? '';
 
   const { image, note } = await takeScreenshot(tab);
-  const photos = context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
+  const photos = context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount, context.photoLinks ?? []) : [];
   const record: CaseRecord = {
     id: `${orderId}-${Date.now().toString(36)}`,
     platform,
@@ -145,10 +145,10 @@ async function takeScreenshot(tab: chrome.tabs.Tab): Promise<{ image: string | n
 }
 
 /**
- * Each customer photo, scrolled into view and cropped from a screenshot at full resolution. A photo that moves while
- * capturing is skipped.
+ * Each customer photo. One with a link to its original (DoorDash) is downloaded at full size; otherwise, or if the
+ * download fails, it is scrolled into view and cropped from a screenshot. A photo that moves while capturing is skipped.
  */
-async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<string[]> {
+async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number, links: (string | null)[]): Promise<string[]> {
   if (tab.id === undefined || tab.windowId === undefined) return [];
   const tabId = tab.id;
   const photos: string[] = [];
@@ -156,6 +156,15 @@ async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<
   try {
     start = await askPage<FramePayload | null>(tabId, { type: 'SCROLL_FRAME', top: null });
     for (let i = 0; i < Math.min(count, 3); i++) {
+      const link = links[i];
+      if (link) {
+        try {
+          photos.push(await downloadPhoto(link));
+          continue;
+        } catch (err) {
+          console.warn('photo download failed, cropping the screenshot instead', err);
+        }
+      }
       const before = await askPage<PhotoFrame | null>(tabId, { type: 'PHOTO_FRAME', index: i, scroll: true });
       if (!before) continue;
       await sleep(CAPTURE_GAP_MS);
@@ -170,6 +179,21 @@ async function takeCustomerPhotos(tab: chrome.tabs.Tab, count: number): Promise<
     if (start) await askPage(tabId, { type: 'SCROLL_FRAME', top: start.scrollTop }).catch(() => {});
   }
   return photos;
+}
+
+const MAX_PHOTO_BYTES = 20_000_000;
+
+/** The original photo from its link, scaled so its long side is at most 1600px, as JPEG. */
+async function downloadPhoto(link: string): Promise<string> {
+  const res = await fetch(link, { credentials: 'omit' });
+  if (!res.ok) throw new Error(`photo download: HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith('image/') || blob.size > MAX_PHOTO_BYTES) throw new Error(`photo download: ${blob.type}, ${blob.size} bytes`);
+  const bitmap = await createImageBitmap(blob);
+  const k = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const out = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * k)), Math.max(1, Math.round(bitmap.height * k)));
+  out.getContext('2d')!.drawImage(bitmap, 0, 0, out.width, out.height);
+  return blobToDataUrl(await out.convertToBlob({ type: 'image/jpeg', quality: 0.85 }));
 }
 
 async function cropPhoto(rawDataUrl: string, f: PhotoFrame): Promise<string> {

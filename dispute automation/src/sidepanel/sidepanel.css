@@ -30,6 +30,7 @@
   --warning:#ad5700;--warning-bg:#fff4d5;
   --danger:#cd2b31;--danger-bg:#ffefef;
   --neutral:#6f6f6f;--neutral-bg:#f3f3f3;
+  --goodwill:#bd4b00;--goodwill-bg:#fff1e7; /* brand-1100 on brand-300 */
   --scrim:rgba(23,23,23,.24);
   --shadow-raised:0 0 0 1px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.06);
   --image-outline:rgba(0,0,0,.1);
@@ -43,7 +44,7 @@
     --text:#ededed;--text-secondary:#a0a0a0;--text-muted:#7e7e7e;
     --primary:#f76808;--primary-hover:#ff802b;--primary-text:#ff8b3e;--on-primary:#ffffff;--focus:#ff802b;
     --success:#4cc38a;--success-bg:#0f291e;--warning:#f1a10d;--warning-bg:#341c00;
-    --danger:#ff6369;--danger-bg:#3c181a;--neutral:#a0a0a0;--neutral-bg:#232323;
+    --danger:#ff6369;--danger-bg:#3c181a;--neutral:#a0a0a0;--neutral-bg:#232323;--goodwill:#ff8b3e;--goodwill-bg:#391a03;
     --scrim:rgba(0,0,0,.5);--shadow-raised:0 0 0 1px rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.4);
     --image-outline:rgba(255,255,255,.1);
     color-scheme:dark;
@@ -55,7 +56,7 @@
   --text:#ededed;--text-secondary:#a0a0a0;--text-muted:#7e7e7e;
   --primary:#f76808;--primary-hover:#ff802b;--primary-text:#ff8b3e;--on-primary:#ffffff;--focus:#ff802b;
   --success:#4cc38a;--success-bg:#0f291e;--warning:#f1a10d;--warning-bg:#341c00;
-  --danger:#ff6369;--danger-bg:#3c181a;--neutral:#a0a0a0;--neutral-bg:#232323;
+  --danger:#ff6369;--danger-bg:#3c181a;--neutral:#a0a0a0;--neutral-bg:#232323;--goodwill:#ff8b3e;--goodwill-bg:#391a03;
   --scrim:rgba(0,0,0,.5);--shadow-raised:0 0 0 1px rgba(255,255,255,.06),0 8px 24px rgba(0,0,0,.4);
   --image-outline:rgba(255,255,255,.1);
   color-scheme:dark;
@@ -115,6 +116,7 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
   background:var(--neutral-bg);color:var(--neutral)}
 .assessment::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
 .assessment.dispute{background:var(--success-bg);color:var(--success)}
+.assessment.goodwill{background:var(--goodwill-bg);color:var(--goodwill)}
 .assessment.needs_review{background:var(--warning-bg);color:var(--warning)}
 .assessment.do_not_dispute{background:var(--neutral-bg);color:var(--neutral)}
 .meta{margin:0;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}

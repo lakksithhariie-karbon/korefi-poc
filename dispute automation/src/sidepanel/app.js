@@ -38,7 +38,7 @@
     sources:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>'
   };
   const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
-  const VERDICT = {dispute:'Dispute',needs_review:'Needs review',do_not_dispute:'Do not dispute'};
+  const VERDICT = {dispute:'Dispute',goodwill:'Goodwill',needs_review:'Needs review',do_not_dispute:'Do not dispute'};
   const PLATFORMS = {
     doordash:{name:'DoorDash',url:/^https:\/\/(?:[a-z0-9-]+\.)*doordash\.com\//i,store:/^\d{3,32}$/},
     ubereats:{name:'Uber Eats',url:/^https:\/\/(?:[a-z0-9-]+\.)*(?:ubereats|uber)\.com\//i,store:/^[A-Za-z0-9-]{3,64}$/},
@@ -403,7 +403,7 @@
     // The server has the images now. Taking the chip away stops a retry from uploading them twice.
     removeAttachment();
     const result=await pollInvestigation(started.investigation_id);
-    if(!['dispute','needs_review','do_not_dispute'].includes(result?.recommendation)||!Array.isArray(result.tools_used))
+    if(!Object.hasOwn(VERDICT,result?.recommendation??"")||!Array.isArray(result.tools_used))
       throw Error('The agent returned an incomplete answer. Try again.');
     return result;
   }

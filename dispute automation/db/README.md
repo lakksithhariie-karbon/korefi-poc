@@ -17,7 +17,7 @@ The service never changes the schema, and a test asserts that no DDL appears in 
 All primary keys are `uuid` (`gen_random_uuid()`), all timestamps `timestamptz`.
 
 - `cases`: one per order. `(tenant_id, platform, platform_store_id, platform_order_id)` is unique, as is `(tenant_id, id)` (used by tenant-scoped foreign keys). `case_status` is one of captured, investigating, ready_to_dispute, submitted, closed. `platform_store_id` is `unresolved` when the store is unknown. Unused so far: `screenshot_object_key`, `location_id`.
-- `investigations`: one agent run per row (`status` running/completed/failed/cancelled; `recommendation` dispute/needs_review/do_not_dispute). Has `prompt_version` and `usage_summary` (the service now fills `prompt_version`).
+- `investigations`: one agent run per row (`status` running/completed/failed/cancelled; `recommendation` dispute/goodwill/needs_review/do_not_dispute; goodwill since migration 002). Has `prompt_version` and `usage_summary` (the service now fills `prompt_version`).
 - `agent_tool_calls`: one per tool call (`status` running/completed/failed/blocked), counts in `result_summary`.
 - `submissions`: the operator's attested filing. Unique `(tenant_id, idempotency_key)`; foreign key `(tenant_id, case_id)` to `cases`.
 - `case_events`: audit trail (`actor_type` operator/agent/system). The service writes conversation_opened, evidence_added, agent_answered, operator_confirmed_submission.
@@ -30,6 +30,7 @@ Read-only history the agent searches, in the `doordash` schema: `financial_detai
 
 - `000_schema_migrations`: the tracking table (`version`, `checksum`).
 - `001_conversations`: `conversations`, `conversation_messages`, `conversation_runs`, `conversation_state`, `evidence_images`. Tenant-scoped like `submissions`; no existing table is altered.
+- `002_goodwill_recommendation`: lets `investigations.recommendation` and `conversations.last_recommendation` hold `goodwill` (the ops playbook's goodwill path). Only the two check constraints change.
 
 Rules: one file per change, numbered, never edited after it has been applied (the runner refuses a changed file), additive where possible, no `BEGIN`/`COMMIT` inside (the runner wraps each file in a transaction).
 

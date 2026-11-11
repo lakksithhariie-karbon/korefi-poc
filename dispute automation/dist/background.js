@@ -296,7 +296,7 @@
     const snapshot = payload?.snapshot ?? { ...parseOrder(`Order: ${orderId}`).snapshot, platform };
     const redactedText = payload?.redactedText ?? context?.safeText ?? "";
     const { image, note } = await takeScreenshot(tab);
-    const photos = context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount) : [];
+    const photos = context?.photoCount ? await takeCustomerPhotos(tab, context.photoCount, context.photoLinks ?? []) : [];
     const record = {
       id: `${orderId}-${Date.now().toString(36)}`,
       platform,
@@ -369,7 +369,7 @@
       });
     }
   }
-  async function takeCustomerPhotos(tab, count) {
+  async function takeCustomerPhotos(tab, count, links) {
     if (tab.id === void 0 || tab.windowId === void 0) return [];
     const tabId = tab.id;
     const photos = [];
@@ -377,6 +377,15 @@
     try {
       start = await askPage(tabId, { type: "SCROLL_FRAME", top: null });
       for (let i = 0; i < Math.min(count, 3); i++) {
+        const link = links[i];
+        if (link) {
+          try {
+            photos.push(await downloadPhoto(link));
+            continue;
+          } catch (err) {
+            console.warn("photo download failed, cropping the screenshot instead", err);
+          }
+        }
         const before = await askPage(tabId, { type: "PHOTO_FRAME", index: i, scroll: true });
         if (!before) continue;
         await sleep(CAPTURE_GAP_MS);
@@ -392,6 +401,18 @@
       });
     }
     return photos;
+  }
+  var MAX_PHOTO_BYTES = 2e7;
+  async function downloadPhoto(link) {
+    const res = await fetch(link, { credentials: "omit" });
+    if (!res.ok) throw new Error(`photo download: HTTP ${res.status}`);
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/") || blob.size > MAX_PHOTO_BYTES) throw new Error(`photo download: ${blob.type}, ${blob.size} bytes`);
+    const bitmap = await createImageBitmap(blob);
+    const k = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const out = new OffscreenCanvas(Math.max(1, Math.round(bitmap.width * k)), Math.max(1, Math.round(bitmap.height * k)));
+    out.getContext("2d").drawImage(bitmap, 0, 0, out.width, out.height);
+    return blobToDataUrl(await out.convertToBlob({ type: "image/jpeg", quality: 0.85 }));
   }
   async function cropPhoto(rawDataUrl, f) {
     const bitmap = await createImageBitmap(await (await fetch(rawDataUrl)).blob());

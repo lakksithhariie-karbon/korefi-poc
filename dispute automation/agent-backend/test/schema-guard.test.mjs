@@ -78,11 +78,17 @@ test('the service never changes the schema: no DDL anywhere in its source', () =
 test('migrations match the live schema conventions', () => {
   const dir = path.join(here, '../../db/migrations');
   const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-  assert.deepEqual(files, ['000_schema_migrations.sql', '001_conversations.sql']);
+  assert.deepEqual(files, ['000_schema_migrations.sql', '001_conversations.sql', '002_goodwill_recommendation.sql']);
   const strip = (f) => readFileSync(path.join(dir, f), 'utf8').split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
-  const all = files.map(strip).join('\n');
-  assert.doesNotMatch(all, /\bBEGIN\b\s*;|\bCOMMIT\b\s*;/i, 'the runner owns the transaction');
+  assert.doesNotMatch(files.map(strip).join('\n'), /\bBEGIN\b\s*;|\bCOMMIT\b\s*;/i, 'the runner owns the transaction');
+  const all = files.filter((f) => f !== '002_goodwill_recommendation.sql').map(strip).join('\n');
   assert.doesNotMatch(all, /ALTER\s+TABLE/i, 'existing tables are left alone');
+  // 002 only widens the two recommendation checks to accept 'goodwill'; it touches no column, row or other constraint.
+  const goodwill = strip('002_goodwill_recommendation.sql');
+  const statements = goodwill.split(';').map((x) => x.trim()).filter(Boolean);
+  assert.equal(statements.length, 4);
+  for (const x of statements) assert.match(x, /^ALTER TABLE dispute_automation\.(investigations|conversations) (DROP CONSTRAINT IF EXISTS|ADD CONSTRAINT) (investigations_recommendation_check|conversations_last_recommendation_check)\b/);
+  assert.equal((goodwill.match(/'dispute', 'goodwill', 'needs_review', 'do_not_dispute'/g) || []).length, 2);
   assert.doesNotMatch(all, /CREATE TABLE(?! IF NOT EXISTS)/i);
   assert.doesNotMatch(all, /\bbigserial\b|\bserial\b|\bbigint\s+(NOT NULL\s+)?REFERENCES/i, 'keys are uuid, like the existing tables');
   const chat = strip('001_conversations.sql');

@@ -112,6 +112,8 @@ export interface CaptureContext {
   safeText: string;
   /** How many customer-uploaded photos are on the order right now. */
   photoCount: number;
+  /** For each of those photos, the link to its full-size original (DoorDash), or null. */
+  photoLinks?: (string | null)[];
   /** Something the operator can do on the page for a better capture, such as expanding collapsed feedback. */
   hint: string | null;
 }

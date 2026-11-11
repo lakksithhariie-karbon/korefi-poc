@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.11.2
+# KoreFi Dispute Assistant v0.12.1
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -17,6 +17,32 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. **Draft** under an answer: edit, **Copy draft**, file it on the platform, then **Yes, mark as disputed** to log it.
+
+## v0.12.1: DoorDash customer photos at full size
+- DoorDash shows the customer's photo as a 72px thumbnail under "left a comment", through its resizing proxy
+  (`img.cdn4dd.com/cdn-cgi/image/fit=cover,width=72,height=72,…/<original>`). The link inside is the original photo on
+  `media-platform.cdn4dd.com/media/cnr_photo_proof/…`. KoreFi now finds the photo by that link and downloads the
+  original (long side up to 1600px) instead of cropping the tiny thumbnail off the screen.
+- New permission: `https://media-platform.cdn4dd.com/*`, DoorDash's photo site, used only to download those photos.
+  Chrome asks to approve it when the extension updates.
+- If the download fails (for example after DoorDash's 30 days, when photos are removed), the thumbnail is cropped from the
+  screen as before. Uber Eats photos are unchanged.
+
+## v0.12.0 and backend 0.7.0: the ops playbook
+**Ship together, migration first.** Apply `db/migrations/002_goodwill_recommendation.sql`, deploy backend 0.7.0, then hand
+out extension 0.12.0. An older panel rejects a Goodwill answer as incomplete.
+
+- The agent reads the ops team's "Chargeback Dispute Procedure" on every run (`agent-backend/playbook/chargeback-dispute-procedure.md`):
+  the decision framework, the strongest arguments per error type, the templates, the goodwill path, evidence to attach,
+  appeals, and Grubhub's portal-plus-email route. Edit that file to change the playbook; bump `PROMPT_VERSION` when you do.
+- The store standard practices in it (2-step check, wastage log, quality tests, fresh stock, standardized preparation,
+  hygiene) are stated as fact for every store. Facts about the order itself still come only from the page and photos.
+- New verdict **Goodwill**: when the evidence is on the customer's side, the draft asks for a goodwill reversal instead of
+  disputing. Migration 002 lets the database store it.
+- The playbook's win rates guide the agent's choice only; it never shows the operator a percentage.
+- Drafts must fit the form: DoorDash 500 characters, Uber Eats 400 (Grubhub has no limit). An over-long draft goes back
+  to the agent once to be shortened; if it is still too long, the answer says so. Both steps are logged
+  (`agent_draft_too_long`, `agent_draft_shortened`).
 
 ## v0.11.2: Uber Eats item lists read correctly
 
