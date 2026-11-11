@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.13.1
+# KoreFi Dispute Assistant v0.13.2
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -17,7 +17,17 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
-   platform, then tap **I filed it in DoorDash** (or Uber Eats) to log it.
+   platform, then tap **I filed it in DoorDash** (or Uber Eats) and confirm **Mark as disputed** to log it.
+
+## v0.13.2: a confirmation card before marking as disputed
+- **I filed it in DoorDash** now opens a small card in the chat (after shadcn's AI Elements Confirmation): "Mark
+  C5DF4996 as disputed? Only once DoorDash has accepted it. KoreFi records it; it does not file anything." with
+  **Not yet** and **Mark as disputed**.
+- The card eases in. **Not yet** fades it away, records nothing and brings the chip back.
+- **Mark as disputed** shrinks the card smoothly into one line. While it saves, the line shimmers "Marking as
+  disputed…", then a check pops in: "Marked as disputed · Nov 11, 3:02 pm". If KoreFi cannot be reached, the line
+  says "Saved in this browser only" with **Try saving again**. The old green box is gone.
+- Reduced motion: the same steps, without movement.
 
 ## Backend 0.8.1: drafts ready to paste
 - The draft no longer carries `[verify: …]` placeholders. The operator copies it into the platform form as it is.

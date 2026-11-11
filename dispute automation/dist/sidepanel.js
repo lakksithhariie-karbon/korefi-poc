@@ -34,6 +34,8 @@
   const ICONS = {
     copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
     check:'<path d="M20 6 9 17l-5-5"/>',
+    flag:'<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
+    alert:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
     edit:'<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>',
     sources:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>'
   };
@@ -426,7 +428,7 @@
   function showSuggestions(result){
     const asked=(result?.suggested_followups||[]).filter(Boolean).slice(0,3);
     const chips=(asked.length?asked:DEFAULT_FOLLOWUPS).map(text=>({text,run:()=>void send(text)}));
-    if(!filing&&draftText.trim())chips.push({text:`I filed it in ${platformName(current)}`,run:()=>void confirmSubmitted().catch(e=>toast(String(e.message||e)))});
+    if(!filing&&draftText.trim())chips.push({text:`I filed it in ${platformName(current)}`,run:askToConfirm});
     const el=$('suggestions');el.replaceChildren();
     for(const chip of chips){const b=document.createElement('button');b.type='button';b.textContent=chip.text;
       b.addEventListener('click',chip.run);el.append(b);}
@@ -599,18 +601,67 @@
     if(!result?.id||!result?.case_id)throw Error('The server did not confirm it saved the dispute.');
     return {state:'synced',backendId:result.id,error:null};
   }
+  // ---- marking as disputed: a confirmation card (after shadcn's AI Elements Confirmation) that settles into one line ----
+  const calm=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function askToConfirm(){
+    if(!current||filing)return;
+    if(!draftText.trim()){toast('There is no draft yet');return;}
+    const where=platformName(current),order=isPlaceholder(current)?'this order':current.orderId;
+    const box=$('filingState');box.className='filing ask';box.dataset.state='ask';box.style.height='';
+    box.innerHTML=`<span class="filing-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${ICONS.flag}</svg></span>
+      <div class="filing-content"><strong id="filingTitle"></strong><p id="filingDescription"></p>
+      <div class="filing-actions"><button class="button small" id="notYet" type="button">Not yet</button>
+      <button class="button small primary" id="yesFiled" type="button">Mark as disputed</button></div></div>`;
+    $('filingTitle').textContent=`Mark ${order} as disputed?`;
+    $('filingDescription').textContent=`Only once ${where} has accepted it. KoreFi records it; it does not file anything.`;
+    $('notYet').addEventListener('click',dismissConfirm);
+    $('yesFiled').addEventListener('click',()=>void approveConfirm());
+    hide('suggestions');hide('filingState',false);scrollMain();$('yesFiled').focus();
+  }
+  // Not yet: nothing is recorded, the card fades away and the chip comes back.
+  function dismissConfirm(){
+    const box=$('filingState');box.classList.add('leaving');
+    setTimeout(()=>{hide('filingState');box.className='filing';box.dataset.state='';box.replaceChildren();if(analysis&&!filing)showSuggestions(analysis);focusComposer();},calm()?0:180);
+  }
+  async function approveConfirm(){
+    $('notYet').disabled=true;$('yesFiled').disabled=true;
+    try{await confirmSubmitted();}
+    catch(e){toast(String(e.message||e));$('notYet').disabled=false;$('yesFiled').disabled=false;}
+  }
+  // The answered card becomes one line: the height eases from the card to the line. While it saves the line shimmers,
+  // then the check pops in. A save that fails says so and offers to try again.
   function renderFiling(rec){
     if(!rec?.filing)return;
-    filing=rec;hide('filingState',false);
+    filing=rec;
     // A filed draft is final: close any open editor and hide the Edit buttons.
     $thread.querySelectorAll('.draft-edit[aria-pressed="true"]').forEach(b=>b.click());$thread.classList.add('filed');
+    const box=$('filingState'),morph=box.classList.contains('ask')&&!box.hidden&&!calm();
+    const from=morph?box.getBoundingClientRect().height:0;
     const synced=rec.filing.syncState==='synced';
-    $('filingState').classList.toggle('done',synced);
-    $('filingTitle').textContent=synced?'Marked as disputed':'Saved in this browser only';
+    const state=synced?'done':(syncBusy?'saving':'pending');
+    // The panel re-draws the line right after saving; keep the pop and the easing so they are not cut short.
+    const prev=box.hidden?'':box.dataset.state;
+    const pop=state==='done'&&!calm()&&(['ask','saving','pending'].includes(prev)||(prev==='done'&&box.classList.contains('pop')));
+    const settling=morph||(!box.hidden&&box.classList.contains('settling'));
     const date=new Date(rec.filing.confirmedAt).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-    $('filingDescription').textContent=synced?`You confirmed it was submitted in ${platformName(rec)} on ${date}.`:
-      `You confirmed it on ${date}. ${rec.filing.syncError||'It has not reached KoreFi yet.'}`;
-    hide('retrySync',synced);$('retrySync').disabled=syncBusy;
+    box.className=`filing line ${state}${settling?' settling':''}${morph?' enter':''}${pop?' pop':''}`;box.dataset.state=state;
+    box.innerHTML=`<div class="filing-row"><span class="filing-mark" aria-hidden="true"><svg viewBox="0 0 24 24">${state==='pending'?ICONS.alert:ICONS.check}</svg></span>
+      <strong id="filingTitle"></strong><span class="filing-when"></span></div>
+      <p id="filingDescription"></p><button class="text-button" id="retrySync" type="button">Try saving again</button>`;
+    const title=$('filingTitle');
+    title.textContent={done:'Marked as disputed',saving:'Marking as disputed…',pending:'Saved in this browser only'}[state];
+    title.classList.toggle('shimmer',state==='saving');
+    box.querySelector('.filing-when').textContent=state==='saving'?'':`· ${date}`;
+    $('filingDescription').textContent=state==='pending'?(rec.filing.syncError||'It has not reached KoreFi yet.'):'';
+    hide('filingDescription',state!=='pending');hide('retrySync',state!=='pending');$('retrySync').disabled=syncBusy;
+    $('retrySync').addEventListener('click',()=>{if(filing)void pushFiling(filing);});
+    hide('filingState',false);
+    if(morph){
+      const to=box.scrollHeight;box.style.height=`${from}px`;
+      requestAnimationFrame(()=>{box.style.height=`${to}px`;});
+      box.addEventListener('transitionend',function done(e){if(e.propertyName!=='height')return;box.style.height='';box.classList.remove('settling');box.removeEventListener('transitionend',done);});
+      setTimeout(()=>{box.style.height='';box.classList.remove('settling');},500);
+    }
   }
   async function pushFiling(rec){
     if(!rec?.filing||syncBusy||rec.filing.syncState==='synced')return;
@@ -622,7 +673,7 @@
       renderFiling(updated);
     }finally{syncBusy=false;renderFiling((await getCase(rec.id))||rec);}
   }
-  // The "I filed it" chip records straight away, with the last copied draft (or the newest one if nothing was copied).
+  // Records the filing once the card is approved, with the last copied draft (or the newest one if nothing was copied).
   async function confirmSubmitted(){
     const text=(draftCopied&&copiedText)||draftText.trim();
     if(!current||!text){toast('There is no draft yet');return;}
@@ -633,8 +684,9 @@
     if(duplicate){filing=duplicate;renderFiling(duplicate);toast('This order is already marked as disputed');return;}
     const data={confirmedAt:new Date().toISOString(),draft:text,syncState:'pending',syncError:null,lastSyncAttempt:null,backendId:null};
     const rec=await patchCase(current.id,{status:'filed',filing:data,agentStoreId:current.agentStoreId||current.storeId||null});
-    filing=rec;renderFiling(rec);hide('suggestions');scrollMain();
-    await pushFiling(rec);
+    filing=rec;hide('suggestions');
+    // pushFiling shows the saving line first, then the result.
+    await pushFiling(rec);scrollMain();
   }
 
   // ---- history: every chat on the server, newest first ----
@@ -769,7 +821,6 @@
   $('chatForm').addEventListener('submit',e=>{e.preventDefault();void send();});
   $prompt.addEventListener('input',()=>{$prompt.style.height='auto';$prompt.style.height=Math.min($prompt.scrollHeight,144)+'px';updateSend();});
   $prompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('chatForm').requestSubmit();}});
-  $('retrySync').addEventListener('click',()=>{if(filing)void pushFiling(filing);});
   chrome.runtime.onMessage.addListener(message=>{
     if(message?.type==='CASE_CAPTURED'){
       endCapture();

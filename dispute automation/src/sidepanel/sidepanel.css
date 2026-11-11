@@ -241,11 +241,38 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .draft-input{display:block;width:100%;min-height:120px;resize:none;overflow:hidden;padding:12px;border:0;background:transparent;outline:0;line-height:1.55;box-shadow:inset 0 0 0 1px var(--focus);border-radius:0 0 12px 12px}
 .draft-input[hidden]{display:none}
 .thread.filed .draft-edit{display:none}
-.filing-state{margin-top:16px}
-.callout{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--bg-raised)}
-.callout p{margin:0;color:var(--text-secondary);font-size:13px}
-.callout.done{border-color:transparent;background:var(--success-bg)}
-.callout.done strong{color:var(--success)}
+/* Marking as disputed: a confirmation card (after shadcn's AI Elements Confirmation) that settles into one line */
+.filing{margin-top:16px;padding:12px;border:1px solid transparent;border-radius:12px;overflow:hidden}
+.filing p{margin:0;color:var(--text-secondary);font-size:13px}
+.filing.ask{display:flex;gap:12px;border-color:var(--border-strong);background:var(--bg-raised)}
+.filing-icon{flex:none;width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text-secondary)}
+.filing-icon svg{width:16px;height:16px}
+.filing-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.filing-content strong{font-weight:500;overflow-wrap:anywhere}
+.filing-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:10px}
+.button.small{height:30px;padding:0 12px;border-radius:8px}
+.filing-row{display:flex;align-items:center;gap:8px;font-size:13px}
+.filing-row strong{font-weight:500}
+.filing-when{color:var(--text-muted);font-variant-numeric:tabular-nums}
+.filing-mark{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:50%}
+.filing-mark svg{width:12px;height:12px;stroke-width:3}
+.filing.done strong{color:var(--success)}
+.filing.done .filing-mark{background:var(--success);color:var(--bg)}
+.filing.saving .filing-mark{background:var(--surface-active);color:var(--text-muted)}
+.filing.pending .filing-mark{color:var(--warning)}
+.filing.pending .filing-mark svg{width:18px;height:18px;stroke-width:2}
+.filing.line p{margin:4px 0 0 28px}
+.filing.line .text-button{margin:4px 0 0 20px}
+@media (prefers-reduced-motion:no-preference){
+  .filing{transition:height .28s var(--ease),border-color .28s var(--ease),background-color .28s var(--ease)}
+  .filing.ask{animation:confirm-in .22s var(--ease) both}
+  .filing.leaving{animation:confirm-out .18s var(--ease) both}
+  .filing.enter .filing-row{animation:fade-in .24s var(--ease) both .06s}
+  .filing.pop .filing-mark{animation:pop .34s cubic-bezier(.3,1.6,.5,1) both}
+}
+@keyframes confirm-in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes confirm-out{to{opacity:0;transform:translateY(4px) scale(.98)}}
+@keyframes pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
 
 .source{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
 .source span:last-child{color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}

@@ -434,8 +434,25 @@ try {
   check('copy takes the edited text', /Edited by ops\.$/.test(await panel.evaluate(() => window.__copied || '')));
   await panel.waitForTimeout(400);
   await panel.screenshot({ path: path.join(out, 'panel-draft.png') });
+  // The chip asks first, in a confirmation card. Not yet records nothing and brings the chip back.
   await panel.locator('#suggestions button', { hasText: 'I filed it in DoorDash' }).click();
+  await panel.waitForSelector('#filingState.ask:not([hidden])');
+  check('the chip opens a confirmation card instead of recording', (await panel.locator('#filingTitle').innerText()) === 'Mark 3990CBFD as disputed?' &&
+    /Only once DoorDash has accepted it/.test(await panel.locator('#filingDescription').innerText()) && store.submissions.length === 0 && await panel.locator('#suggestions').isHidden());
+  check('the card eases in', await panel.evaluate(() => getComputedStyle(document.getElementById('filingState')).animationName === 'confirm-in'));
+  await panel.waitForTimeout(300);
+  await panel.screenshot({ path: path.join(out, 'panel-confirm.png') });
+  await panel.click('#notYet');
+  check('Not yet closes the card, records nothing, and brings the chip back', !!(await waitFor(async () => await panel.locator('#filingState').isHidden() &&
+    (await panel.locator('#suggestions button', { hasText: 'I filed it in DoorDash' }).count()) === 1)) && store.submissions.length === 0);
+  await panel.locator('#suggestions button', { hasText: 'I filed it in DoorDash' }).click();
+  await panel.click('#yesFiled');
   const logged = await waitFor(async () => (await panel.locator('#filingTitle').innerText().catch(() => '')).includes('Marked as disputed'));
+  check('approving turns the card into one line with a check', !!logged && await panel.evaluate(() => { const b = document.getElementById('filingState');
+    return b.classList.contains('line') && b.classList.contains('done') && !b.classList.contains('ask') && !!b.querySelector('.filing-mark svg') && /· /.test(b.querySelector('.filing-when').textContent); }));
+  await panel.waitForTimeout(600);
+  check('the line settles to its own height', await panel.evaluate(() => document.getElementById('filingState').style.height === ''));
+  await panel.screenshot({ path: path.join(out, 'panel-filed.png') });
   check('filing is logged against the chat without a store ID', !!logged && store.submissions.length === 1 && store.conversations[0].status === 'disputed', JSON.stringify(store.submissions.length));
   check('the filed text is the copied, edited draft', /Edited by ops\.$/.test(store.submissions[0]?.disputeText || ''), store.submissions[0]?.disputeText);
   check('a filed draft can no longer be edited', !(await block.locator('.draft-edit').isVisible()));
