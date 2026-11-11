@@ -410,7 +410,7 @@
   function startProgress(){
     progressStart=Date.now();clearInterval(progressTimer);
     const el=$('progress');
-    el.innerHTML='<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Looking into it</span><span class="elapsed" id="elapsed"></span>';
+    el.innerHTML='<span class="shimmer">Looking into it…</span><span class="elapsed" id="elapsed"></span>';
     progressTimer=setInterval(()=>{
       const secs=Math.floor((Date.now()-progressStart)/1000);
       if(secs>=2&&el.hidden){hide('progress',false);scrollMain();}
@@ -491,7 +491,35 @@
     }
     showSuggestions(result);scrollMain();
   }
-  function addAnalysis(result){showThread();renderAnalysisCard(result);applyAnalysis(result);}
+  function addAnalysis(result){
+    showThread();const card=renderAnalysisCard(result);applyAnalysis(result);revealCard(card);
+    // A long answer starts from its first line, so the words are seen as they come in.
+    const top=card.getBoundingClientRect().top-$main.getBoundingClientRect().top;
+    if(top<0)$main.scrollTop+=top-16;
+  }
+  // A new answer writes itself in: words fade in one after another (about 1.5s in all), then the rest of the card.
+  // Answers loaded from history, and anyone who prefers reduced motion, see it all at once.
+  function wordsIn(node,at,step){
+    const parts=node.textContent.split(/(\s+)/);node.replaceChildren();
+    for(const part of parts){
+      if(!part)continue;
+      if(!part.trim()){node.append(part);continue;}
+      const w=document.createElement('span');w.className='word';w.style.animationDelay=`${Math.round(at)}ms`;w.textContent=part;node.append(w);at+=step;
+    }
+    return at;
+  }
+  function revealCard(card){
+    if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    const text=card.querySelector('.agent-text'),body=card.querySelector('.draft-body');
+    const words=[text,body].reduce((n,x)=>n+((x?.textContent.match(/\S+/g)||[]).length),0);
+    const step=Math.max(8,Math.min(28,1500/Math.max(words,1)));
+    let at=wordsIn(text,0,step);
+    const late=(el,delay)=>{if(!el)return;el.classList.add('late');el.style.animationDelay=`${Math.round(delay)}ms`;
+      setTimeout(()=>{el.classList.remove('late');el.style.animationDelay='';},delay+400);};
+    if(body){late(body.closest('.draft-block'),at);at=wordsIn(body,at+150,step);}
+    for(const el of card.querySelectorAll(':scope > .meta, :scope > .reply-actions'))late(el,at);
+    late($('suggestions'),at+100);
+  }
   async function run(question){
     if(!current||busy)return;
     const caseId=current.id;

@@ -134,16 +134,19 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .strip-thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
 
 .thinking{display:flex;align-items:center;gap:8px;margin-top:24px;color:var(--text-secondary);font-size:13px}
-.thinking .dots{display:inline-flex;gap:4px}
-.thinking .dots i{width:6px;height:6px;border-radius:50%;background:var(--primary);opacity:.3}
 .thinking .elapsed{margin-left:auto;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}
 .thinking-note{margin:4px 0 0;color:var(--text-muted);font-size:12px}
+/* Motion: a band of stronger text sweeps across "Looking into it…" (after shadcn's shimmer), and a new answer's words
+   fade in one by one, then the rest of its card. Reduced motion shows plain text at once. */
 @media (prefers-reduced-motion:no-preference){
-  .thinking .dots i{animation:dot 1.2s var(--ease) infinite}
-  .thinking .dots i:nth-child(2){animation-delay:.15s}
-  .thinking .dots i:nth-child(3){animation-delay:.3s}
+  .shimmer{color:transparent;-webkit-background-clip:text;background-clip:text;
+    background-image:linear-gradient(105deg,var(--text-secondary) 40%,var(--text) 50%,var(--text-secondary) 60%);
+    background-size:250% 100%;background-repeat:no-repeat;animation:shimmer 2s linear infinite}
+  .word{animation:word-in .4s var(--ease) both}
+  .late{animation:fade-in .3s var(--ease) both}
 }
-@keyframes dot{0%,80%,100%{opacity:.3}40%{opacity:1}}
+@keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
+@keyframes word-in{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:none}}
 
 .suggestions{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:16px}
 .suggestions button{max-width:100%;min-height:32px;padding:6px 12px;border:1px solid var(--border);border-radius:16px;color:var(--text-secondary);font-size:13px;text-align:left;

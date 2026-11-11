@@ -362,11 +362,20 @@ try {
   check('screenshot is attached to the composer', true);
   await panel.fill('#prompt', 'Can we dispute this?');
   await panel.press('#prompt', 'Enter');
+  check('the waiting line shimmers, with no dots', (await panel.locator('#progress .shimmer').innerText().catch(() => '')) === 'Looking into it…' && (await panel.locator('#progress .dots').count()) === 0);
+  check('the shimmer is a moving text gradient', await panel.evaluate(() => { const s = getComputedStyle(document.querySelector('#progress .shimmer')); return s.animationName === 'shimmer' && /gradient/.test(s.backgroundImage) && s.backgroundClip === 'text'; }));
   const answer1 = await waitFor(async () => {
     const t = await panel.locator('.agent-message .agent-text').last().innerText().catch(() => '');
     return t.includes('No history for this store') ? t : null;
   }, 40000);
   check('answer appears after polling', !!answer1);
+  const words = await panel.evaluate(() => { const card = [...document.querySelectorAll('.agent-message')].at(-1);
+    const w = [...card.querySelectorAll('.agent-text .word')]; const d = [...card.querySelectorAll('.draft-body .word')];
+    return { n: w.length, d: d.length, lastDelay: parseFloat(getComputedStyle(w.at(-1)).animationDelay), firstDraft: parseFloat(getComputedStyle(d[0] || w[0]).animationDelay), anim: getComputedStyle(w[0]).animationName }; });
+  check('a new answer fades in word by word, then its draft', words.n > 5 && words.d > 3 && words.anim === 'word-in' && words.lastDelay > 0 && words.firstDraft > words.lastDelay, JSON.stringify(words));
+  check('the answer text is unchanged by the animation', answer1.startsWith('No history for this store'));
+  await panel.waitForTimeout(2500);
+  check('after the animation every word is fully shown', await panel.evaluate(() => [...document.querySelectorAll('.agent-message .word')].every((w) => getComputedStyle(w).opacity === '1')));
   check('woke the backend before investigating', pi.wakes >= 1);
   const opened = pi.bodies.find((b) => b.url === '/v1/conversations');
   const openedBody = opened && JSON.parse(opened.raw);
@@ -435,7 +444,8 @@ try {
   // 6. Reopen the panel: the chat comes back from the server, evidence images included. History lists it.
   await openPanel();
   await panel.waitForSelector('.agent-message');
-  check('reopening the panel restores the chat', (await panel.locator('.user-bubble .chat-text').count()) >= 3 && (await panel.locator('.agent-message').count()) >= 3);
+  check('answers loaded from history appear at once, not animated', (await panel.locator('.agent-message .word').count()) === 0);
+  check('reopening the panel restores the chat',(await panel.locator('.user-bubble .chat-text').count()) >= 3 && (await panel.locator('.agent-message').count()) >= 3);
   check('evidence images are shown from the server', await panel.waitForSelector('.evidence-strip .strip-thumb img', { timeout: 15000 }).then(() => true, () => false));
   check('a disputed chat shows its note', (await panel.locator('.system-note').allInnerTexts()).some((t) => /Marked as disputed/.test(t)));
   await panel.click('#historyButton');

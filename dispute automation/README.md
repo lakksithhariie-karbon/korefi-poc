@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.13.0
+# KoreFi Dispute Assistant v0.13.1
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -18,6 +18,15 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
    work right after clicking the KoreFi icon on that tab. **Send** asks the agent. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
    platform, then tap **I filed it in DoorDash** (or Uber Eats) to log it.
+
+## v0.13.1: motion while waiting and when the answer arrives
+- "Looking into it…" shimmers: a band of stronger text sweeps across the words every 2 seconds (after shadcn's
+  shimmer utility, in plain CSS). The three dots are gone. The seconds counter still shows after 10 seconds.
+- A new answer writes itself in, like ChatGPT or Claude: its words fade in one after another (about 1.5 seconds in all),
+  then the draft block's words, then the sources line, the buttons and the suggested questions.
+- This is an animation of the finished answer. The server still sends the whole answer at once; nothing streams.
+- Answers reopened from history appear at once. With the system's "reduce motion" setting on, nothing moves.
+- A long answer scrolls to its first line when it arrives, so you see it being written.
 
 ## v0.13.0: the draft in the chat
 - The draft now shows right under the agent's answer, in a block labelled "DoorDash draft" (or "Uber Eats draft") with
