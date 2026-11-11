@@ -2,7 +2,7 @@
 export const UNRESOLVED_STORE = 'unresolved';
 
 /** Recorded on every run so an answer can be traced to the instructions that produced it. Bump when the prompt changes. */
-export const PROMPT_VERSION = '2026-11-11.photo-check-1';
+export const PROMPT_VERSION = '2026-11-11.paste-ready-1';
 
 /** The longest dispute text each platform's form takes, in characters (from the ops playbook). Grubhub takes longer texts. */
 export const DRAFT_LIMITS = { doordash: 500, ubereats: 400 };

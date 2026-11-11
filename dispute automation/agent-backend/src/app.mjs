@@ -9,7 +9,7 @@ const MAX_CONCURRENT_RUNS = 4;
 // Two captures of a long order with customer photos fit; more than that should be a new chat.
 const MAX_IMAGES_PER_CONVERSATION = 24;
 const DAY_MS = 86_400_000;
-const VERSION = '0.8.0';
+const VERSION = '0.8.1';
 const PLATFORM_NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 
 const sha = (s) => createHash('sha256').update(s).digest();

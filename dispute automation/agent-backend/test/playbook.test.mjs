@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
-import { INSTRUCTIONS, PLAYBOOK, draftLength, investigate } from '../src/agent.mjs';
+import { INSTRUCTIONS, PLAYBOOK, draftLength, investigate, placeholders, stripPlaceholders } from '../src/agent.mjs';
 import { DRAFT_LIMITS } from '../src/constants.mjs';
 import { buildFollowUpPrompt, buildPrompt } from '../src/prompt.mjs';
 import { parseAgentOutput } from '../src/validation.mjs';
@@ -47,7 +47,7 @@ test('the whole playbook goes to the agent with its instructions', () => {
 });
 
 test('store practices are stated as fact, order facts still come from the evidence', () => {
-  assert.match(INSTRUCTIONS, /standard practices in the playbook \(2-step check, wastage log.*\) are confirmed facts for every store: state them plainly, without \[verify\]/);
+  assert.match(INSTRUCTIONS, /standard practices in the playbook \(2-step check, wastage log.*\) are confirmed facts for every store: state them plainly\./);
   assert.match(INSTRUCTIONS, /Everything about this order .* must come from the evidence/);
   assert.match(INSTRUCTIONS, /NEVER MAKE UP FACTS/);
 });
@@ -103,4 +103,44 @@ test('a draft within the limit, or on Grubhub, is not sent back', async () => {
 test('characters are counted as the operator sees them', () => {
   assert.equal(draftLength('café ☕'), 6);
   assert.equal(draftLength(null), 0);
+});
+
+test('the draft is ready to paste: no placeholders, gaps go to missing evidence, chat facts go in', () => {
+  assert.match(INSTRUCTIONS, /THE DRAFT IS READY TO PASTE/);
+  assert.match(INSTRUCTIONS, /never contains placeholders, brackets, blanks or notes to the operator \(no \[verify\], \[insert\], \[X\], TBD or XX\)/);
+  assert.match(INSTRUCTIONS, /The playbook's \[bracketed\] words are slots you fill from the evidence; if you cannot fill one, leave that argument out/);
+  assert.match(INSTRUCTIONS, /in missing_evidence and ask for it in suggested_followups, never in the draft/);
+  assert.match(INSTRUCTIONS, /When the operator gives you a fact in the chat .* add it to the draft/);
+  assert.doesNotMatch(INSTRUCTIONS.replace(/\(no \[verify\][^)]*\)/, ''), /\[verify/i, 'nothing else asks for [verify]');
+});
+
+test('placeholders are found, and cut out cleanly as a last resort', () => {
+  assert.deepEqual(placeholders('We dispute it. [verify: POS/kitchen completion record]'), ['[verify: POS/kitchen completion record]']);
+  assert.deepEqual(placeholders('Ready at {time}, TBD, XX minutes late.'), ['{time}', 'TBD', 'XX']);
+  assert.deepEqual(placeholders('Order C5DF4996, $8.39, 2-step check.'), []);
+  assert.equal(stripPlaceholders('No Lassi wastage recorded. [verify: POS record]'), 'No Lassi wastage recorded.');
+  assert.equal(stripPlaceholders('Ready at [X] pm , then sent.'), 'Ready at pm, then sent.');
+});
+
+test('a draft with placeholders is sent back once and the clean one is kept', async () => {
+  const { streamFn, prompts, calls } = fakeModel(['We dispute order ABC12345. [verify: POS/kitchen completion record]', 'We dispute order ABC12345. All items passed our 2-step check.']);
+  const logs = [];
+  const out = await run('doordash', streamFn, logs);
+  assert.equal(calls(), 2);
+  assert.match(prompts[1], /Your draft_text has placeholders: \[verify: POS\/kitchen completion record\]\. The operator pastes the draft into the DoorDash form exactly as it is/);
+  assert.equal(out.draft_text, 'We dispute order ABC12345. All items passed our 2-step check.');
+  assert.deepEqual(logs.filter((l) => l.event.startsWith('agent_draft_placeholders')).map((l) => [l.event, l.by_model]), [['agent_draft_placeholders', undefined], ['agent_draft_placeholders_removed', true]]);
+});
+
+test('a placeholder the model keeps is cut out before the operator sees it', async () => {
+  const { streamFn, calls } = fakeModel(['We dispute it. [verify POS]', 'We dispute it. [verify POS ticket]']);
+  const out = await run('doordash', streamFn);
+  assert.equal(calls(), 2, 'only one retry');
+  assert.equal(out.draft_text, 'We dispute it.');
+});
+
+test('a clean draft is not sent back', async () => {
+  const { streamFn, calls } = fakeModel(['We dispute order ABC12345. No wastage recorded.']);
+  await run('doordash', streamFn);
+  assert.equal(calls(), 1);
 });

@@ -17,6 +17,13 @@ const NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' 
 /** Characters as the operator sees them, so an emoji or accented letter counts once. */
 export const draftLength = (text) => [...String(text || '')].length;
 
+/** Placeholders a pasted draft must not carry: [verify ...], [X], {item}, TBD, XX. */
+const PLACEHOLDER = /\[[^\]\n]*\]|\{[^}\n]*\}|\bTBD\b|\bX{2,}\b/g;
+export const placeholders = (text) => String(text || '').match(PLACEHOLDER) || [];
+/** Last resort when the model keeps a placeholder: cut it out and tidy the spacing it leaves. */
+export const stripPlaceholders = (text) =>
+  String(text || '').replace(PLACEHOLDER, '').replace(/[ \t]{2,}/g, ' ').replace(/ +([.,;:!?])/g, '$1').replace(/([.,;:])\1+/g, '$1').replace(/ +\n/g, '\n').trim();
+
 const BASE_INSTRUCTIONS =
   "You are KoreFi's dispute agent for restaurant operations staff. Orders come from DoorDash, Uber Eats or Grubhub; the turn says which. Think of yourself as a coding agent whose codebase is a dispute case: " +
   'investigate with the read-only tools, read the captured order and screenshot, then tell the operator plainly what you found and what to do next. ' +
@@ -25,9 +32,13 @@ const BASE_INSTRUCTIONS =
   'what the customer claimed against what was ordered, the courier\'s part, and the customer\'s history shown on the page. ' +
   'FOLLOW THE PLAYBOOK below: its decision framework, the strongest arguments for the error type, its templates, the goodwill path and the appeal rules. ' +
   'NEVER MAKE UP FACTS. A false claim can get the store flagged. ' +
-  'The store standard practices in the playbook (2-step check, wastage log, quality tests, fresh stock, standardized preparation, hygiene) are confirmed facts for every store: state them plainly, without [verify]. ' +
-  'Everything about this order (items, times, amounts, the customer\'s history, what the photos show) must come from the evidence; ' +
-  'anything else the operator still has to confirm (a POS ticket, a packing photo, a staff note) goes in as a [verify] placeholder, never as a fact. ' +
+  'The store standard practices in the playbook (2-step check, wastage log, quality tests, fresh stock, standardized preparation, hygiene) are confirmed facts for every store: state them plainly. ' +
+  'Everything about this order (items, times, amounts, the customer\'s history, what the photos show) must come from the evidence or from what the operator tells you in this chat. ' +
+  'THE DRAFT IS READY TO PASTE. The operator copies draft_text straight into the platform\'s dispute form and changes nothing, ' +
+  'so it never contains placeholders, brackets, blanks or notes to the operator (no [verify], [insert], [X], TBD or XX). ' +
+  'The playbook\'s [bracketed] words are slots you fill from the evidence; if you cannot fill one, leave that argument out. ' +
+  'Leave out any claim you cannot support. Put what would make the case stronger (a POS ticket, a packing photo, a staff note) in missing_evidence and ask for it in suggested_followups, never in the draft. ' +
+  'When the operator gives you a fact in the chat (a ready time, a staff note, what the POS shows), it is the store\'s own statement: add it to the draft. ' +
   'LEARN FROM PAST DISPUTES. find_similar_disputes returns this store\'s earlier KoreFi cases: the dispute that was filed and how it ended. ' +
   'Reuse arguments that won, change the approach where similar disputes were denied, and tell the operator what you learned. A denial is a lesson, not a reason to stop disputing. ' +
   'Write the draft like the store manager wrote it: short, specific and factual, in the first person plural, naming the order, the item and the facts. ' +
@@ -64,7 +75,7 @@ const BASE_INSTRUCTIONS =
   "recommendation ('dispute','goodwill','needs_review','do_not_dispute'), " +
   'reasoning_summary (the message the operator reads in chat: plain text, short paragraphs, under 220 words unless asked for more, answering the latest question directly), ' +
   'missing_evidence (array of strings), ' +
-  'draft_text (the complete, editable dispute text to paste into the platform\'s dispute form, with [verify] placeholders for anything unproven; if the operator already has a draft, return the full revised draft only when they asked you to change it, otherwise return it unchanged), ' +
+  'draft_text (the complete dispute text, ready to paste into the platform\'s dispute form as it is, with no placeholders; if the operator already has a draft, return the full revised draft when they asked you to change it or gave you new facts for it, or when it still has placeholders, otherwise return it unchanged), ' +
   'suggested_followups (up to 4 short questions the operator might ask next, each under 60 characters, chosen for this case), ' +
   'risk_notes (string).';
 
@@ -237,6 +248,20 @@ export async function investigate({ store, tenant, request, runId, env = process
       return parseAgentOutput(last?.content?.filter((c) => c.type === 'text').map((c) => c.text).join('\n') || '');
     };
     let out = reply();
+    // The operator pastes the draft as it is, so a draft with placeholders gets one request to remove them.
+    const found = placeholders(out.draft_text);
+    if (found.length) {
+      step('agent_draft_placeholders', { found });
+      await agent.prompt(
+        `Your draft_text has placeholders: ${found.join(' ')}. The operator pastes the draft into the ${NAMES[platform]} form exactly as it is. ` +
+          'Return the same JSON with draft_text rewritten without any placeholder: fill each one from the evidence or this chat, or leave that claim out, and list what is missing in missing_evidence.',
+      );
+      const clean = reply();
+      if (clean.draft_text) out = clean;
+      const left = placeholders(out.draft_text);
+      if (left.length) out.draft_text = stripPlaceholders(out.draft_text);
+      step('agent_draft_placeholders_removed', { by_model: !left.length, cut_out: left });
+    }
     // The platform form cuts or refuses a longer text, so an over-long draft gets one request to shorten it.
     const limit = DRAFT_LIMITS[platform];
     if (limit && draftLength(out.draft_text) > limit) {
@@ -244,10 +269,10 @@ export async function investigate({ store, tenant, request, runId, env = process
       step('agent_draft_too_long', { chars: before, limit });
       await agent.prompt(
         `Your draft_text is ${before} characters. The ${NAMES[platform]} dispute form takes at most ${limit} characters, counting spaces. ` +
-          `Return the same JSON with draft_text rewritten to at most ${limit} characters. Keep the strongest arguments and every fact; drop repetition and filler.`,
+          `Return the same JSON with draft_text rewritten to at most ${limit} characters. Keep the strongest arguments and every fact; drop repetition and filler. No placeholders.`,
       );
       const shorter = reply();
-      if (shorter.draft_text) out = shorter;
+      if (shorter.draft_text) out = { ...shorter, draft_text: placeholders(shorter.draft_text).length ? stripPlaceholders(shorter.draft_text) : shorter.draft_text };
       const after = draftLength(out.draft_text);
       step('agent_draft_shortened', { chars: after, limit, fits: after <= limit });
       if (after > limit) {

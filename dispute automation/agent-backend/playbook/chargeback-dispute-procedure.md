@@ -5,7 +5,7 @@ Follow it on every case. Where it gives a template, adapt the template to this o
 
 ## Store standard practices (state these as fact)
 
-Every store KoreFi works with follows these practices. State them plainly in drafts, without [verify]:
+Every store KoreFi works with follows these practices. State them plainly in drafts:
 - 2-step check: items, quantity and customizations are confirmed before packing and again before courier handoff.
 - Wastage log: wastage is recorded. "No [item] wastage recorded on [order date]" may be stated for the item in question.
 - Regular quality assessment tests.

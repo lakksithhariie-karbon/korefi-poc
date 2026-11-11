@@ -19,6 +19,17 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
    platform, then tap **I filed it in DoorDash** (or Uber Eats) to log it.
 
+## Backend 0.8.1: drafts ready to paste
+- The draft no longer carries `[verify: …]` placeholders. The operator copies it into the platform form as it is.
+- A claim the agent cannot support is left out of the draft. What would make the case stronger (a POS ticket, a
+  packing photo) goes under "things to verify" and into the suggested questions instead.
+- Facts the operator gives in the chat ("the POS shows the lassi was made at 8:14 pm") are the store's own statements
+  and go into the next draft.
+- Safety net: a draft that still has a placeholder (`[…]`, `{…}`, TBD, XX) is sent back to the model once; anything
+  left after that is cut out before the operator sees it. Logged as `agent_draft_placeholders` in Render.
+- Tested on order C5DF4996 with Muse Ember, 3 runs of 2 turns: no placeholders in 6 of 6 drafts, the operator's
+  POS times added 3 of 3, every draft under 500 characters.
+
 ## v0.13.1: motion while waiting and when the answer arrives
 - "Looking into it…" shimmers: a band of stronger text sweeps across the words every 2 seconds (after shadcn's
   shimmer utility, in plain CSS). The three dots are gone. The seconds counter still shows after 10 seconds.
