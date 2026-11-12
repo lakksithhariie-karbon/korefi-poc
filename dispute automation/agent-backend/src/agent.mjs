@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { DRAFT_LIMITS, PROMPT_VERSION, UNRESOLVED_STORE, modelConfig } from './constants.mjs';
 import { buildFollowUpPrompt, buildPrompt } from './prompt.mjs';
 import { exportTranscript, isFirstTurn } from './transcript.mjs';
-import { HttpError, parseAgentOutput } from './validation.mjs';
+import { HttpError, parseAgentOutput, shapeAnswer } from './validation.mjs';
 
 /** The ops team's dispute playbook. Read once at startup and sent with the instructions on every run. */
 export const PLAYBOOK = readFileSync(new URL('../playbook/chargeback-dispute-procedure.md', import.meta.url), 'utf8');
@@ -73,7 +73,11 @@ const BASE_INSTRUCTIONS =
   'On a first turn, use the tools before answering. On a follow-up turn, answer from the conversation and call tools only for new facts. ' +
   'Your final response must be ONLY valid JSON, no markdown fences, with: ' +
   "recommendation ('dispute','goodwill','needs_review','do_not_dispute'), " +
-  'reasoning_summary (the message the operator reads in chat: plain text, short paragraphs, under 220 words unless asked for more, answering the latest question directly), ' +
+  'reasoning_summary (on a follow-up turn, the message the operator reads in chat: plain text, short paragraphs, under 220 words unless asked for more, answering the latest question directly; on a first turn, leave it empty), ' +
+  'headline (first turn only: one sentence under 25 words saying what to do and the main reason; a closed dispute route goes here), ' +
+  'customer_comment (first turn only: the customer\'s own comment copied word for word from the page, or null when the page shows none; never paraphrase or translate it), ' +
+  'key_points (first turn only: at most 6 objects {label, text}, the facts the operator needs to scan, most important first. label is 1 to 3 words such as Charge, Deadline, Photo, Other items, History, Courier; ' +
+  'text is one short line under 20 words (the Photo point may take up to 35), no full stop at the end. Put the photo check in a Photo point. On a follow-up turn, leave headline, customer_comment and key_points empty), ' +
   'missing_evidence (array of strings), ' +
   'draft_text (the complete dispute text, ready to paste into the platform\'s dispute form as it is, with no placeholders; if the operator already has a draft, return the full revised draft when they asked you to change it or gave you new facts for it, or when it still has placeholders, otherwise return it unchanged), ' +
   'suggested_followups (up to 4 short questions the operator might ask next, each under 60 characters, chosen for this case), ' +
@@ -279,6 +283,10 @@ export async function investigate({ store, tenant, request, runId, env = process
         out.risk_notes = [out.risk_notes, `The draft is ${after} characters, over the ${NAMES[platform]} limit of ${limit}. Shorten it before filing.`].filter(Boolean).join(' ');
       }
     }
+    out = shapeAnswer(out, {
+      first: !(resuming && !first),
+      pageText: [request.redactedText, request.facts?.customerComment, request.facts?.notice].filter(Boolean).join('\n'),
+    });
     if (!toolTrace.length && first) {
       out.risk_notes = [out.risk_notes, 'No database lookup was made for this answer.'].filter(Boolean).join(' ');
     }

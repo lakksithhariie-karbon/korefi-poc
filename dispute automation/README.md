@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.13.6
+# KoreFi Dispute Assistant v0.14.0
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -19,6 +19,15 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
    question and **Send**. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
    platform, then tap **I filed it in DoorDash** (or Uber Eats) and confirm **Mark as disputed** to log it.
+
+## v0.14.0 and backend 0.9.0: answers you can scan
+- The first answer in a chat is now a one-line summary, then the customer's own comment ("Customer said: …"), then at
+  most 6 short points with a bold label (**Charge:**, **Deadline:**, **Photo:**, **History:**, **Courier:** …).
+- The customer's comment is shown only when the page text has those exact words, so a made-up quote never shows. No
+  comment on the page, no line.
+- Answers to follow-up questions stay as short plain text. Older chats keep their paragraph.
+- The draft is unchanged: one paragraph, ready to paste.
+- Needs backend 0.9.0. With the older backend the panel shows the paragraph as before.
 
 ## v0.13.6: no copy icon under the answer
 - The small copy icon under the answer is gone. The orange **I filed it in DoorDash** (or Uber Eats) button now sits

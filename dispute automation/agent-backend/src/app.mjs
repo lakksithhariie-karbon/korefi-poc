@@ -9,7 +9,7 @@ const MAX_CONCURRENT_RUNS = 4;
 // Two captures of a long order with customer photos fit; more than that should be a new chat.
 const MAX_IMAGES_PER_CONVERSATION = 24;
 const DAY_MS = 86_400_000;
-const VERSION = '0.8.1';
+const VERSION = '0.9.0';
 const PLATFORM_NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 
 const sha = (s) => createHash('sha256').update(s).digest();
@@ -241,6 +241,9 @@ export function createApp({ store, investigate, env = process.env, log = (line) 
       ...(row.conversation_id ? { conversation_id: String(row.conversation_id), message_id: message ? String(message.id) : null } : {}),
       recommendation: r.recommendation ?? row.recommendation,
       reasoning_summary: r.reasoning_summary ?? row.reasoning_summary,
+      headline: r.headline ?? '',
+      customer_comment: r.customer_comment ?? null,
+      key_points: r.key_points ?? [],
       missing_evidence: r.missing_evidence ?? (Array.isArray(row.missing_evidence) ? row.missing_evidence : []),
       draft_text: r.draft_text ?? (row.draft_text || ''),
       risk_notes: r.risk_notes ?? row.risk_notes,

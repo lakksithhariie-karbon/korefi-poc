@@ -436,8 +436,26 @@
     const el=document.createElement('article');el.className='agent-message';
     const verdict=document.createElement('span');verdict.className=`assessment ${result.recommendation}`;
     const big=document.createElement('span');big.className='big';big.textContent=VERDICT[result.recommendation]||'Review';verdict.append(big);
-    const p=document.createElement('p');p.className='agent-text';p.textContent=result.reasoning_summary||'No reason was given.';
-    el.append(verdict,p);if(result.draft_text)el.append(draftBlock(result.draft_text));
+    el.append(verdict);
+    // A first answer is a headline, the customer's own words and up to 6 labelled points; older answers and follow-ups are plain text.
+    const points=Array.isArray(result.key_points)?result.key_points:[];
+    if(points.length){
+      if(result.headline){const h=document.createElement('p');h.className='agent-text';h.textContent=result.headline;el.append(h);}
+      if(result.customer_comment){
+        const c=document.createElement('p');c.className='customer-said';
+        const l=document.createElement('span');l.textContent='Customer said: ';
+        c.append(l,`“${result.customer_comment}”`);el.append(c);
+      }
+      const ul=document.createElement('ul');ul.className='key-points';
+      for(const pt of points){
+        const li=document.createElement('li');const b=document.createElement('strong');b.textContent=`${pt.label}: `;
+        li.append(b,pt.text);ul.append(li);
+      }
+      el.append(ul);
+    }else{
+      const p=document.createElement('p');p.className='agent-text';p.textContent=result.reasoning_summary||'No reason was given.';el.append(p);
+    }
+    if(result.draft_text)el.append(draftBlock(result.draft_text));
     $thread.append(el);
     return el;
   }
@@ -503,9 +521,11 @@
     const text=card.querySelector('.agent-text'),body=card.querySelector('.draft-body');
     const words=[text,body].reduce((n,x)=>n+((x?.textContent.match(/\S+/g)||[]).length),0);
     const step=Math.max(8,Math.min(28,1500/Math.max(words,1)));
-    let at=wordsIn(text,0,step);
+    let at=text?wordsIn(text,0,step):0;
     const late=(el,delay)=>{if(!el)return;el.classList.add('late');el.style.animationDelay=`${Math.round(delay)}ms`;
       setTimeout(()=>{el.classList.remove('late');el.style.animationDelay='';},delay+400);};
+    // The comment and each point fade in one after another.
+    for(const x of card.querySelectorAll(':scope > .customer-said, :scope > .key-points > li')){late(x,at);at+=120;}
     if(body){late(body.closest('.draft-block'),at);at=wordsIn(body,at+150,step);}
     late($('suggestions'),at);
   }

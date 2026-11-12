@@ -194,10 +194,23 @@ const backend = createApp({
     agentCalls.push({ request, transcript, images });
     if (/FAIL/.test(request.operatorQuestion || '')) throw new Error('internal detail that must not leak');
     const n = agentCalls.length;
+    // A first answer comes as a headline, the customer's comment and labelled points; a follow-up as plain text.
+    const shape = transcript.length === 0
+      ? {
+          headline: `No history for this store. Gather the POS ticket, then dispute order ${request.orderId}.`,
+          customer_comment: n === 1 ? 'the samosa never came' : null,
+          key_points: [
+            { label: 'Charge', text: 'Missing item on the order' },
+            { label: 'Photo', text: `I looked at ${images.length} image(s)` },
+            { label: 'History', text: 'None for this store' },
+          ],
+        }
+      : { headline: '', customer_comment: null, key_points: [] };
     return {
       // The second answer is a goodwill verdict, so the panel's fourth verdict is seen in a real browser.
       recommendation: n === 2 ? 'goodwill' : 'needs_review',
       reasoning_summary: `No history for this store. Missing item on order ${request.orderId}; I looked at ${images.length} image(s). Gather the POS ticket.`,
+      ...shape,
       missing_evidence: ['POS ticket time'],
       draft_text: `Order ${request.orderId}: we dispute the charge. [verify POS ticket time]`,
       risk_notes: null,
@@ -380,6 +393,14 @@ try {
     return { n: w.length, d: d.length, lastDelay: parseFloat(getComputedStyle(w.at(-1)).animationDelay), firstDraft: parseFloat(getComputedStyle(d[0] || w[0]).animationDelay), anim: getComputedStyle(w[0]).animationName }; });
   check('a new answer fades in word by word, then its draft', words.n > 5 && words.d > 3 && words.anim === 'word-in' && words.lastDelay > 0 && words.firstDraft > words.lastDelay, JSON.stringify(words));
   check('the answer text is unchanged by the animation', answer1.startsWith('No history for this store'));
+  check('a first answer shows the headline, the customer comment, then labelled points', await panel.evaluate(() => {
+    const card = [...document.querySelectorAll('.agent-message')].at(-1);
+    const kids = [...card.children].map((k) => k.className.split(' ')[0]);
+    const li = [...card.querySelectorAll('.key-points li')];
+    return kids.join(',') === 'assessment,agent-text,customer-said,key-points,draft-block' &&
+      card.querySelector('.customer-said').textContent === 'Customer said: “the samosa never came”' &&
+      li.length === 3 && li[0].querySelector('strong').textContent === 'Charge: ' && li[0].textContent === 'Charge: Missing item on the order';
+  }));
   await panel.waitForTimeout(2500);
   check('after the animation every word is fully shown', await panel.evaluate(() => [...document.querySelectorAll('.agent-message .word')].every((w) => getComputedStyle(w).opacity === '1')));
   check('woke the backend before investigating', pi.wakes >= 1);
@@ -420,6 +441,10 @@ try {
   check('follow-up has the images again, without the panel re-uploading them', agentCalls[1]?.images.length === agentCalls[0].images.length && !('screenshots' in JSON.parse(pi.bodies.filter((b) => b.url.endsWith('/messages')).at(-1).raw)));
   check('follow-up carries the operator draft', /we dispute the charge/.test(agentCalls[1]?.request.previousDraft || ''));
   await waitFor(async () => (await panel.locator('.agent-message').count()) >= 2);
+  check('a follow-up answer is plain text, with no points', await panel.evaluate(() => {
+    const card = [...document.querySelectorAll('.agent-message')].at(-1);
+    return !card.querySelector('.key-points, .customer-said') && /Gather the POS ticket/.test(card.querySelector('.agent-text').textContent);
+  }));
   check('a goodwill answer is shown as Goodwill, not refused as incomplete', !!(await waitFor(async () => (await panel.locator('.assessment .big').last().innerText().catch(() => '')) === 'Goodwill', 20000)));
 
   // 4. More evidence mid-chat: capturing the same order again adds to this chat instead of replacing it.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sanitizeCapture, sanitizeConfirm, validateStore, parseAgentOutput, readToken, parseIso, HttpError } from '../src/validation.mjs';
+import { sanitizeCapture, sanitizeConfirm, validateStore, parseAgentOutput, shapeAnswer, readToken, parseIso, HttpError } from '../src/validation.mjs';
 import { buildPrompt } from '../src/prompt.mjs';
 import { withSslMode } from '../src/ssl.mjs';
 import { createLimiter, loadTokens } from '../src/app.mjs';
@@ -121,4 +121,38 @@ test('the prompt names the platform and tells the agent which images are custome
   assert.match(p, /2 screenshot images of the order page are attached after the photos/);
   assert.match(p, /The only history is KoreFi's own past cases at this store/);
   assert.doesNotMatch(p, /DoorDash/);
+});
+
+const pointed = (extra = {}) =>
+  parseAgentOutput(JSON.stringify({
+    recommendation: 'dispute', reasoning_summary: '', draft_text: 'd',
+    headline: 'Dispute it: two items reported missing after a 2-step check.',
+    customer_comment: 'Samosa and falooda never came',
+    key_points: [1, 2, 3, 4, 5, 6, 7].map((n) => ({ label: `Point ${n}:`, text: `fact ${n}` })),
+    ...extra,
+  }));
+test('a first answer keeps the headline, the comment and at most 6 points', () => {
+  const x = shapeAnswer(pointed(), { first: true, pageText: 'Customer comment\n"samosa and  Falooda never came"' });
+  assert.equal(x.key_points.length, 6);
+  assert.deepEqual(x.key_points[0], { label: 'Point 1', text: 'fact 1' });
+  assert.equal(x.customer_comment, 'Samosa and falooda never came');
+  assert.equal(x.reasoning_summary.split('\n\n')[0], 'Dispute it: two items reported missing after a 2-step check.');
+  assert.match(x.reasoning_summary, /Customer said: "Samosa and falooda never came"\n\n- Point 1: fact 1\n/);
+});
+test('a customer comment the page does not show is dropped', () => {
+  const x = shapeAnswer(pointed(), { first: true, pageText: 'Customer comment\nfood was cold' });
+  assert.equal(x.customer_comment, null);
+  assert.doesNotMatch(x.reasoning_summary, /Customer said/);
+  assert.equal(shapeAnswer(pointed(), { first: true, pageText: '' }).customer_comment, null);
+});
+test('a follow-up is plain text, even when the model sends points', () => {
+  const x = shapeAnswer(pointed({ reasoning_summary: 'The POS ticket time is missing.' }), { first: false, pageText: 'Samosa and falooda never came' });
+  assert.deepEqual([x.headline, x.customer_comment, x.key_points], ['', null, []]);
+  assert.equal(x.reasoning_summary, 'The POS ticket time is missing.');
+  const y = shapeAnswer(pointed(), { first: false, pageText: '' });
+  assert.match(y.reasoning_summary, /^Dispute it: .*\nPoint 1: fact 1\n/);
+});
+test('a first answer without points falls back to its plain text', () => {
+  const x = shapeAnswer(parseAgentOutput(JSON.stringify({ recommendation: 'dispute', reasoning_summary: 'Plain answer.', draft_text: 'd' })), { first: true, pageText: '' });
+  assert.deepEqual([x.reasoning_summary, x.key_points], ['Plain answer.', []]);
 });

@@ -192,10 +192,13 @@ export function parseAgentOutput(text) {
       /* try the next candidate */
     }
   }
-  if (!x || typeof x.reasoning_summary !== 'string') {
+  if (!x || (typeof x.reasoning_summary !== 'string' && !Array.isArray(x.key_points))) {
     return {
       recommendation: 'needs_review',
       reasoning_summary: raw.slice(0, 5000),
+      headline: '',
+      customer_comment: null,
+      key_points: [],
       draft_text: '',
       missing_evidence: [],
       suggested_followups: [],
@@ -204,7 +207,15 @@ export function parseAgentOutput(text) {
   }
   return {
     recommendation: RECOMMENDATIONS.includes(x.recommendation) ? x.recommendation : 'needs_review',
-    reasoning_summary: x.reasoning_summary.slice(0, 5000),
+    reasoning_summary: typeof x.reasoning_summary === 'string' ? x.reasoning_summary.slice(0, 5000) : '',
+    headline: typeof x.headline === 'string' ? x.headline.trim().slice(0, 300) : '',
+    customer_comment: typeof x.customer_comment === 'string' ? x.customer_comment.trim().slice(0, 1000) : null,
+    key_points: Array.isArray(x.key_points)
+      ? x.key_points
+          .filter((p) => p && typeof p.label === 'string' && typeof p.text === 'string' && p.label.trim() && p.text.trim())
+          .map((p) => ({ label: p.label.trim().replace(/:$/, '').slice(0, 30), text: p.text.trim().slice(0, 300) }))
+          .slice(0, 6)
+      : [],
     draft_text: typeof x.draft_text === 'string' ? x.draft_text.slice(0, 6000) : '',
     missing_evidence: Array.isArray(x.missing_evidence) ? x.missing_evidence.filter((y) => typeof y === 'string').slice(0, 15) : [],
     suggested_followups: Array.isArray(x.suggested_followups)
@@ -212,6 +223,29 @@ export function parseAgentOutput(text) {
       : [],
     risk_notes: typeof x.risk_notes === 'string' ? x.risk_notes.slice(0, 2000) : null,
   };
+}
+
+const plain = (s) => String(s || '').toLowerCase().replace(/[“”"'‘’`]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * A first answer is a one-line headline, the customer's comment and up to 6 labelled points; a follow-up is plain text.
+ * The comment is kept only when the page text shows it, so a quote the page does not have never reaches the operator.
+ * reasoning_summary always holds the whole answer as text, for the chat history and the logs.
+ */
+export function shapeAnswer(out, { first, pageText }) {
+  const r = { ...out };
+  const points = first && r.key_points?.length ? r.key_points : [];
+  if (!points.length) {
+    if (!r.reasoning_summary.trim()) {
+      r.reasoning_summary = [r.headline, ...(r.key_points || []).map((p) => `${p.label}: ${p.text}`)].filter(Boolean).join('\n');
+    }
+    return { ...r, headline: '', customer_comment: null, key_points: [] };
+  }
+  const comment = plain(r.customer_comment) && plain(pageText).includes(plain(r.customer_comment)) ? r.customer_comment : null;
+  r.key_points = points;
+  r.customer_comment = comment;
+  r.reasoning_summary = [r.headline, comment && `Customer said: "${comment}"`, points.map((p) => `- ${p.label}: ${p.text}`).join('\n')].filter(Boolean).join('\n\n');
+  return r;
 }
 
 export function readToken(s) {

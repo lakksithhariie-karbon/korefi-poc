@@ -112,6 +112,11 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .agent-message{display:flex;flex-direction:column;gap:12px}
 .agent-text{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .agent-message.is-error .agent-text{color:var(--text-secondary)}
+.customer-said{margin:0;overflow-wrap:anywhere}
+.customer-said span{color:var(--text-secondary)}
+.key-points{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;overflow-wrap:anywhere}
+.key-points li::marker{color:var(--text-muted)}
+.key-points strong{font-weight:600}
 .assessment{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;
   background:var(--neutral-bg);color:var(--neutral)}
 .assessment::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
