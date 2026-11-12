@@ -322,7 +322,7 @@
   var CAPTURE_GAP_MS = 600;
   var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   var withheld = (why) => ({ image: null, note: `No screenshot: ${why}` });
-  var NEEDS_ACCESS = "Chrome has not let KoreFi see this tab yet. Tap + and choose Allow when Chrome asks.";
+  var NEEDS_ACCESS = "Chrome has not let KoreFi see this tab yet. Tap Screenshot and choose Allow when Chrome asks.";
   async function takeScreenshot(tab) {
     if (!tab.active || tab.id === void 0 || tab.windowId === void 0) {
       return { image: null, note: "No screenshot: the order tab is not the active tab. Switch to it and capture again." };

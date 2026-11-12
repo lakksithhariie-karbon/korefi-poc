@@ -75,7 +75,7 @@ try {
     c = (await panel.evaluate(async () => (await chrome.storage.local.get('cases')).cases ?? []))[0] ?? null;
   }
   check('declined: the order is still read', c?.orderId === '5DE2A', JSON.stringify(c?.orderId));
-  check('declined: no screenshot, and the note says to tap + and allow', !!c && !c.image && /Tap \+ and choose Allow/.test(c.imageNote ?? ''), String(c?.imageNote));
+  check('declined: no screenshot, and the note says to tap Screenshot and allow', !!c && !c.image && /Tap Screenshot and choose Allow/.test(c.imageNote ?? ''), String(c?.imageNote));
   const toast = await panel.locator('#toast').innerText().catch(() => '');
   check('declined: the panel shows that note', /choose Allow/.test(toast), toast);
 

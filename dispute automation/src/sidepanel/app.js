@@ -124,7 +124,9 @@
   function updateSend(){
     $('send').disabled=busy||captureBusy||(!$prompt.value.trim()&&!attached);
     $('capture').disabled=captureBusy||busy;
-    $('capture').title=captureBusy?'Attaching…':'Attach this page';
+    $('capture').title=captureBusy?'Attaching…':attached?'Attach this page again':'Attach this page';
+    $('capture').classList.toggle('busy',captureBusy);
+    $('captureLabel').textContent=captureBusy?'Attaching…':'Screenshot';
     $prompt.disabled=busy;
   }
   function showThread(){ hide('empty');hide('thread',false); }
@@ -245,7 +247,7 @@
     },60000);
   }
   function endCapture(){captureBusy=false;clearTimeout(captureTimer);captureTimer=null;updateSend();}
-  // Screenshots need Chrome's <all_urls> grant (or a fresh toolbar click on that tab). Asked once, from the + tap.
+  // Screenshots need Chrome's <all_urls> grant (or a fresh toolbar click on that tab). Asked once, from the Screenshot tap.
   const SEE_TABS={origins:['<all_urls>']};
   let canSeeTabs=false,askingAccess=false;
   const checkTabAccess=()=>chrome.permissions.contains(SEE_TABS).then(v=>{canSeeTabs=v;},()=>{canSeeTabs=false;});
@@ -544,7 +546,7 @@
     const question=typed.trim()||(attached?'Can I dispute this order?':'');
     if(!question)return;
     if(!current){
-      addUser(question);addAssistant('Open an order in DoorDash or Uber Eats and tap + to attach it. Then I can look into it.');
+      addUser(question);addAssistant('Open an order in DoorDash or Uber Eats and tap Screenshot to attach it. Then I can look into it.');
       $prompt.value='';$prompt.style.height='';updateSend();return;
     }
     if(filing){addAssistant('This chat is marked as disputed. Start a new chat for anything else.');return;}

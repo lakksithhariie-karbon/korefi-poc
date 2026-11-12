@@ -171,7 +171,18 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .send-button:disabled{background:var(--surface-active);color:var(--text-muted)}
 .send-button:active:not(:disabled){transform:scale(.96)}
 @media (hover:hover){.send-button:hover:not(:disabled){background:var(--primary-hover)}}
-#capture.captured{color:var(--primary-text)}
+/* "+ Screenshot" attaches the open page; it reads "Attaching…" while it works and "✓ Screenshot" once attached. */
+.capture-pill{height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 10px;border:1px solid var(--border);border-radius:16px;
+  color:var(--text-secondary);font-size:13px;transition:background-color .15s var(--ease),color .15s var(--ease),border-color .15s var(--ease),transform .15s ease-out}
+.capture-pill svg{width:16px;height:16px;stroke-width:1.75}
+.capture-pill .when-captured,.capture-pill.captured .when-idle,.capture-pill.busy svg{display:none}
+.capture-pill.captured .when-captured{display:block}
+.capture-pill.busy{padding:0 12px}
+.capture-pill.captured{color:var(--primary-text)}
+.capture-pill:active:not(:disabled){transform:scale(.96)}
+.capture-pill:disabled:not(.busy){opacity:.4}
+@media (hover:hover){.capture-pill:hover:not(:disabled){background:var(--surface-hover);color:var(--text)}
+  .capture-pill.captured:hover:not(:disabled){color:var(--primary-text)}}
 
 .attachment{display:flex;align-items:center;gap:8px;padding:4px;border-radius:12px;background:var(--surface);align-self:flex-start;max-width:100%}
 .attachment-thumb{width:40px;height:40px;border-radius:8px;overflow:hidden;outline:1px solid var(--image-outline);outline-offset:-1px;flex:none}

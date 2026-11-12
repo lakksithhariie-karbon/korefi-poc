@@ -21,7 +21,7 @@
     <main class="main" id="main">
       <div class="empty" id="empty">
         <h1>Which order should we look at?</h1>
-        <p>Open an order in DoorDash or Uber Eats, then tap + to attach it.</p>
+        <p>Open an order in DoorDash or Uber Eats, then tap Screenshot to attach it.</p>
       </div>
       <section class="thread" id="thread" aria-label="Chat" aria-live="polite" hidden></section>
       <div class="thinking" id="progress" role="status" aria-live="polite" hidden></div>
@@ -52,8 +52,10 @@
         </div>
         <textarea id="prompt" rows="1" placeholder="Ask about this order" aria-label="Message"></textarea>
         <div class="composer-row">
-          <button class="icon-button" id="capture" type="button" aria-label="Attach this order page" title="Attach this page">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          <button class="capture-pill" id="capture" type="button" title="Attach this page">
+            <svg class="when-idle" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            <svg class="when-captured" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            <span id="captureLabel">Screenshot</span>
           </button>
           <button class="send-button" id="send" type="submit" aria-label="Send" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>

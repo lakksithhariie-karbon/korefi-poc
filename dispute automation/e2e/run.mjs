@@ -360,11 +360,14 @@ try {
   panel.on('request', (r) => { if (r.method() === 'POST' && r.url().includes(`:${piPort}/`)) pi.bodies.push({ url: new URL(r.url()).pathname, raw: r.postData() || '', key: r.headers()['idempotency-key'] || null }); });
   await panel.waitForSelector('#attachment:not([hidden])');
   check('screenshot is attached to the composer', true);
+  check('the Screenshot button shows a check once the page is attached', await panel.evaluate(() => { const b = document.querySelector('#capture'); return b.classList.contains('captured') && b.innerText.trim() === 'Screenshot' && getComputedStyle(b.querySelector('.when-captured')).display !== 'none' && getComputedStyle(b.querySelector('.when-idle')).display === 'none'; }));
   check('a new chat with a page attached offers "Check this charge"', (await panel.locator('#starter').isVisible()) && (await panel.locator('#starterButton').innerText()) === 'Check this charge');
   await panel.screenshot({ path: path.join(out, 'panel-starter.png') });
+  await panel.locator('.composer').screenshot({ path: path.join(out, 'composer-captured.png') });
   await panel.fill('#prompt', 'Can we dispute this?');
   await panel.press('#prompt', 'Enter');
   check('the button goes away once a question is sent', await panel.locator('#starter').isHidden());
+  check('the Screenshot button goes back to + once the page is sent', !!(await waitFor(() => panel.evaluate(() => { const b = document.querySelector('#capture'); return !b.classList.contains('captured') && getComputedStyle(b.querySelector('.when-idle')).display !== 'none'; }), 20000)));
   check('the waiting line shimmers, with no dots', (await panel.locator('#progress .shimmer').innerText().catch(() => '')) === 'Looking into it…' && (await panel.locator('#progress .dots').count()) === 0);
   check('the shimmer is a moving text gradient', await panel.evaluate(() => { const s = getComputedStyle(document.querySelector('#progress .shimmer')); return s.animationName === 'shimmer' && /gradient/.test(s.backgroundImage) && s.backgroundClip === 'text'; }));
   const answer1 = await waitFor(async () => {

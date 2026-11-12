@@ -1,4 +1,4 @@
-# KoreFi Dispute Assistant v0.13.3
+# KoreFi Dispute Assistant v0.13.4
 
 A Chrome side-panel extension and a small agent service for delivery-platform disputes, on **DoorDash and Uber Eats**
 (Grubhub next). The operator opens an order in the merchant portal, attaches it, asks the agent what to do, edits the
@@ -14,11 +14,17 @@ DoorDash / Uber Eats tab ── attach (scroll, stitch, customer photos) ──�
 
 1. `npm install && npm run build`, then in Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → `dist/`.
 2. Open an order, click the KoreFi icon on that tab. The first time, open the sidebar → **Settings** → **Connection**: agent URL, access token, your name or ID.
-3. **+** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
+3. **+ Screenshot** attaches the order. The first time, Chrome asks to let KoreFi see your tabs: choose **Allow**, or screenshots will only
    work right after clicking the KoreFi icon on that tab. Tap **Check this charge** above the message box, or type your own
    question and **Send**. Ask follow-ups in the same chat; the agent remembers the conversation and your draft.
 4. The draft shows in the chat under the answer. **Edit** changes it in place, **Copy** copies it. File it on the
    platform, then tap **I filed it in DoorDash** (or Uber Eats) and confirm **Mark as disputed** to log it.
+
+## v0.13.4: a "+ Screenshot" button
+- The bare **+** in the message box is now a labelled pill, **+ Screenshot**, so it is clear what it does. Tapping it
+  attaches the open page, as before.
+- While it works it reads **Attaching…**; once the page is attached it reads **✓ Screenshot** in orange. Tapping it again
+  attaches the page again. When the message is sent it goes back to **+ Screenshot**.
 
 ## v0.13.3: one tap to start
 - Once a page is attached to a new chat, a **Check this charge** button shows just above the message box. Tapping it

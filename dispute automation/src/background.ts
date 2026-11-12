@@ -87,7 +87,7 @@ const CAPTURE_GAP_MS = 600;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const withheld = (why: string) => ({ image: null, note: `No screenshot: ${why}` });
-const NEEDS_ACCESS = 'Chrome has not let KoreFi see this tab yet. Tap + and choose Allow when Chrome asks.';
+const NEEDS_ACCESS = 'Chrome has not let KoreFi see this tab yet. Tap Screenshot and choose Allow when Chrome asks.';
 
 /**
  * Scrolls the order sheet one screen at a time, screenshots each screen exactly as shown, and stitches them into a
