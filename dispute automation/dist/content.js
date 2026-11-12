@@ -571,7 +571,6 @@ ${text}
     const on = platform();
     const root = captureRoot(on);
     const text = root.innerText.slice(0, 2e4);
-    const collapsed = /Customer feedback/i.test(text) && /(^|\n)View more(\n|$)/i.test(text);
     return {
       platform: on,
       orderId: findOrderId(location.href, text),
@@ -580,8 +579,7 @@ ${text}
       url: location.href,
       safeText: pageText(text).slice(0, 9e3),
       photoCount: customerPhotos(root).length,
-      photoLinks: customerPhotoLinks(root),
-      hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null
+      photoLinks: customerPhotoLinks(root)
     };
   }
   var settle = (ms = 350) => new Promise((r) => setTimeout(r, ms));

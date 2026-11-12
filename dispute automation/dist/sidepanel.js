@@ -36,8 +36,7 @@
     check:'<path d="M20 6 9 17l-5-5"/>',
     flag:'<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>',
     alert:'<circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
-    edit:'<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>',
-    sources:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>'
+    edit:'<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/>'
   };
   const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
   const VERDICT = {dispute:'Dispute',goodwill:'Goodwill',needs_review:'Needs review',do_not_dispute:'Do not dispute'};
@@ -51,11 +50,8 @@
   const platformName = c => PLATFORMS[platformOf(c)].name;
   const orderUrl = c => PLATFORMS[platformOf(c)].url.test(c?.url||'')?c.url:null;
   const photosOf = c => Array.isArray(c?.photos)?c.photos:[];
-  const SOURCE_NAMES = {get_order_financials:'DoorDash transactions',get_error_charges:'Error charges and adjustments',get_order_issue_reports:'Order issue reports',
-    get_store_patterns:'Store issue history',find_similar_disputes:'Similar KoreFi disputes'};
 
   function hide(id, value = true) { $(id).hidden = value; }
-  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   const isPlaceholder = c => String(c?.orderId||'').startsWith('SCREENSHOT-');
   const plural = (n, one, many) => `${n} ${n===1?one:many}`;
   const trimDot = s => String(s).replace(/[.\s]+$/,'');
@@ -91,10 +87,9 @@
     else{$('scrim').classList.remove('open');setTimeout(()=>{if(!drawerOpen())hide('scrim');},200);$('historyButton').focus();}
   }
   function openSheet(name){
-    const ids={evidence:'evidenceView',settings:'settingsPanel'};
+    const ids={settings:'settingsPanel'};
     for(const [k,id] of Object.entries(ids))hide(id,k!==name);
     sheet=name;
-    if(name==='evidence')renderEvidence();
     if(name==='settings'){
       $('agentUrl').value=settings.agentUrl||API;$('agentToken').value=settings.agentToken||'';$('operatorId').value=settings.operatorId||'poc-operator';
       $('connection').open=!ready();
@@ -104,13 +99,13 @@
   }
   function closeSheet(){
     if(!sheet)return;
-    hide('evidenceView');hide('settingsPanel');sheet=null;focusComposer();
+    hide('settingsPanel');sheet=null;focusComposer();
   }
 
   // Everything that belongs to one chat. A new chat, a different order, or an opened conversation all start from here.
   function resetChatState(){
     conversationId=null;analysis=null;draftText='';draftCopied=false;copiedText='';filing=null;attachedCase=null;attached=false;metaOpen=false;
-    $thread.replaceChildren();$thread.classList.remove('filed');$('evidenceBody').replaceChildren();
+    $thread.replaceChildren();$thread.classList.remove('filed');
     hide('empty',false);hide('thread');hide('progress');hide('suggestions');hide('attachment');
     hide('filingState');hide('caseMeta');hide('starter');closeSheet();
     $('capture').classList.remove('captured');$prompt.value='';$prompt.style.height='';
@@ -429,15 +424,12 @@
     },500);
   }
   function stopProgress(){clearInterval(progressTimer);progressTimer=null;hide('progress');$('wakeNote')?.remove();}
-  const DEFAULT_FOLLOWUPS=['What evidence is missing?','Make the draft shorter','Find similar disputes'];
-  function showSuggestions(result){
-    const asked=(result?.suggested_followups||[]).filter(Boolean).slice(0,3);
-    const chips=(asked.length?asked:DEFAULT_FOLLOWUPS).map(text=>({text,run:()=>void send(text)}));
-    if(!filing&&draftText.trim())chips.push({text:`I filed it in ${platformName(current)}`,run:askToConfirm});
+  // After an answer with a draft, the one next step: record the filing once it is done on the platform.
+  function showSuggestions(){
     const el=$('suggestions');el.replaceChildren();
-    for(const chip of chips){const b=document.createElement('button');b.type='button';b.textContent=chip.text;
-      b.addEventListener('click',chip.run);el.append(b);}
-    hide('suggestions',false);
+    if(filing||!draftText.trim()){hide('suggestions');return;}
+    const b=document.createElement('button');b.type='button';b.className='next-step';b.textContent=`I filed it in ${platformName(current)}`;
+    b.addEventListener('click',askToConfirm);el.append(b);hide('suggestions',false);
   }
   function fmtWhen(iso){try{return new Date(iso).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});}catch{return '';}}
   function renderAnalysisCard(result){
@@ -445,17 +437,12 @@
     const verdict=document.createElement('span');verdict.className=`assessment ${result.recommendation}`;
     const big=document.createElement('span');big.className='big';big.textContent=VERDICT[result.recommendation]||'Review';verdict.append(big);
     const p=document.createElement('p');p.className='agent-text';p.textContent=result.reasoning_summary||'No reason was given.';
-    const sources=(result.tools_used||[]).length,gaps=Array.isArray(result.missing_evidence)?result.missing_evidence.length:0;
-    const meta=document.createElement('p');meta.className='meta';
-    meta.textContent=[sources?plural(sources,'source checked','sources checked'):'',gaps?plural(gaps,'thing to verify','things to verify'):''].filter(Boolean).join(' · ');
     const actions=document.createElement('div');actions.className='reply-actions';
     const copyBtn=document.createElement('button');copyBtn.type='button';copyBtn.className='icon-button';copyBtn.title='Copy';copyBtn.setAttribute('aria-label','Copy answer');copyBtn.innerHTML=icon('copy');
     copyBtn.addEventListener('click',async()=>{if(await copy(result.reasoning_summary||'')){copyBtn.innerHTML=icon('check');setTimeout(()=>{copyBtn.innerHTML=icon('copy');},1500);}});
     actions.append(copyBtn);
-    const s=document.createElement('button');s.type='button';s.className='text-button';s.dataset.open='evidence';s.innerHTML=`${icon('sources')}<span>Sources</span>`;
-    s.addEventListener('click',()=>openSheet('evidence'));actions.append(s);
     el.append(verdict,p);if(result.draft_text)el.append(draftBlock(result.draft_text));
-    if(meta.textContent)el.append(meta);el.append(actions);$thread.append(el);
+    el.append(actions);$thread.append(el);
     return el;
   }
   // The draft sits in the chat as a block to copy. Edit changes it in place; the last copied or edited text is what gets filed.
@@ -490,13 +477,13 @@
     head.append(label,tools);box.append(head,body,area);
     return box;
   }
-  // The newest answer drives the draft, the sources and the suggested next questions.
+  // The newest answer drives the draft and the next step.
   function applyAnalysis(result){
     analysis=result;
     if(result.draft_text && !filing && (!draftText || !draftCopied)){
       draftText=result.draft_text;draftCopied=false;copiedText='';
     }
-    showSuggestions(result);scrollMain();
+    showSuggestions();scrollMain();
   }
   function addAnalysis(result){
     showThread();const card=renderAnalysisCard(result);applyAnalysis(result);revealCard(card);
@@ -524,7 +511,7 @@
     const late=(el,delay)=>{if(!el)return;el.classList.add('late');el.style.animationDelay=`${Math.round(delay)}ms`;
       setTimeout(()=>{el.classList.remove('late');el.style.animationDelay='';},delay+400);};
     if(body){late(body.closest('.draft-block'),at);at=wordsIn(body,at+150,step);}
-    for(const el of card.querySelectorAll(':scope > .meta, :scope > .reply-actions'))late(el,at);
+    late(card.querySelector(':scope > .reply-actions'),at);
     late($('suggestions'),at+100);
   }
   async function run(question){
@@ -558,32 +545,6 @@
     $prompt.value='';$prompt.style.height='';
     addUser(question,shotSrcs);
     await run(question);
-  }
-  function renderEvidence(){
-    const root=$('evidenceBody');root.replaceChildren();
-    const lead=document.createElement('p');lead.className='lead';root.append(lead);
-    if(!analysis){lead.textContent='Ask about an order first.';return;}
-    lead.textContent='What the agent looked at for its last answer. Records found are not proof a dispute will succeed.';
-    const calls=analysis.tools_used||[];
-    if(!calls.length){const p=document.createElement('p');p.className='hint';p.textContent='The agent answered from the attached page only.';root.append(p);}
-    const list=document.createElement('div');
-    for(const call of calls){
-      const row=document.createElement('div');row.className='source';const count=Number(call.count||0);
-      row.innerHTML=`<span>${esc(SOURCE_NAMES[call.name]||call.name)}</span><span>${count?plural(count,'record','records'):'Nothing found'}</span>`;
-      list.append(row);
-    }
-    root.append(list);
-    const missing=Array.isArray(analysis.missing_evidence)?analysis.missing_evidence:[];
-    if(missing.length){
-      const h=document.createElement('h3');h.className='section-title';h.textContent='To verify';
-      const ul=document.createElement('ul');ul.className='plain-list';
-      for(const m of missing){const li=document.createElement('li');li.textContent=m;ul.append(li);}
-      root.append(h,ul);
-    }
-    if(analysis.risk_notes){
-      const h=document.createElement('h3');h.className='section-title';h.textContent='Caveats';
-      const p=document.createElement('p');p.className='lead';p.textContent=analysis.risk_notes;root.append(h,p);
-    }
   }
   async function copy(value,message=''){
     try{await navigator.clipboard.writeText(value);if(message)toast(message);return true;}
@@ -626,7 +587,7 @@
   // Not yet: nothing is recorded, the card fades away and the chip comes back.
   function dismissConfirm(){
     const box=$('filingState');box.classList.add('leaving');
-    setTimeout(()=>{hide('filingState');box.className='filing';box.dataset.state='';box.replaceChildren();if(analysis&&!filing)showSuggestions(analysis);focusComposer();},calm()?0:180);
+    setTimeout(()=>{hide('filingState');box.className='filing';box.dataset.state='';box.replaceChildren();if(analysis&&!filing)showSuggestions();focusComposer();},calm()?0:180);
   }
   async function approveConfirm(){
     $('notYet').disabled=true;$('yesFiled').disabled=true;
@@ -763,10 +724,10 @@
     for(const c of list){
       const b=document.createElement('button');b.type='button';b.className='history-item';if(String(c.id)===conversationId)b.classList.add('current');
       const title=document.createElement('span');title.className='history-title';
-      const name=document.createElement('span');name.textContent=c.title||('Order '+c.order_id);title.append(name);
+      const name=document.createElement('span');name.textContent=c.order_id;title.append(name);
       if(c.status==='disputed'){const chip=document.createElement('span');chip.className='history-chip done';chip.textContent='Disputed';title.append(chip);}
       else if(c.last_recommendation){const chip=document.createElement('span');chip.className='history-chip';chip.textContent=VERDICT[c.last_recommendation]||c.last_recommendation;title.append(chip);}
-      const meta=document.createElement('span');meta.className='history-meta';meta.textContent=`${PLATFORMS[c.platform]?.name||'DoorDash'} · Order ${c.order_id} · ${fmtWhen(c.updated_at)}`;
+      const meta=document.createElement('span');meta.className='history-meta';meta.textContent=`${PLATFORMS[c.platform]?.name||'DoorDash'} · ${fmtWhen(c.updated_at)}`;
       b.append(title,meta);
       b.addEventListener('click',()=>void openConversation(c.id).catch(e=>toast(String(e.message||e))));
       root.append(b);
@@ -805,7 +766,6 @@
   $('scrim').addEventListener('click',()=>setDrawer(false));
   $('settingsButton').addEventListener('click',()=>openSheet('settings'));
   $('closeSettings').addEventListener('click',closeSheet);
-  $('closeEvidence').addEventListener('click',closeSheet);
   $('saveSettings').addEventListener('click',()=>void saveSettings());
   document.querySelectorAll('[data-theme-choice]').forEach(b=>b.addEventListener('click',()=>theme(b.dataset.themeChoice,true)));
   $('capture').addEventListener('click',onCaptureClick);

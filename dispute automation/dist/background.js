@@ -308,7 +308,7 @@
       snapshot,
       redactedText,
       image,
-      imageNote: [note, context?.hint].filter(Boolean).join(" ") || null,
+      imageNote: note || null,
       photos,
       facts: assessRules(snapshot),
       assessment: null,

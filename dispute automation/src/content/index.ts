@@ -44,7 +44,6 @@ function buildContext(): CaptureContext {
   const on = platform();
   const root = captureRoot(on);
   const text = root.innerText.slice(0, 20000);
-  const collapsed = /Customer feedback/i.test(text) && /(^|\n)View more(\n|$)/i.test(text);
   return {
     platform: on,
     orderId: findOrderId(location.href, text),
@@ -54,7 +53,6 @@ function buildContext(): CaptureContext {
     safeText: pageText(text).slice(0, 9000),
     photoCount: customerPhotos(root).length,
     photoLinks: customerPhotoLinks(root),
-    hint: collapsed ? 'Open "View more" under Customer feedback on the page, then attach again to include every customer photo.' : null,
   };
 }
 

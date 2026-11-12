@@ -397,12 +397,20 @@ try {
   check('the server stored the chat, its images and both messages', store.conversations.length === 1 && store.images.length === openedBody.screenshots.length && store.messages.length === 2);
   check('first turn: agent got the case facts and every image', agentCalls[0].transcript.length === 0 && agentCalls[0].images.length === openedBody.screenshots.length && agentCalls[0].request.issueCategory === 'Missing entire item', JSON.stringify(agentCalls[0].request.issueCategory));
   check('recommendation shown', (await panel.locator('.assessment .big').last().innerText()) === 'Needs review');
-  check('suggested questions come from the server', (await panel.locator('#suggestions button').allInnerTexts()).some((t) => /Check the food photo/.test(t)));
+  check('after a draft the only button is an orange "I filed it in DoorDash"', await panel.evaluate(() => {
+    const b = [...document.querySelectorAll('#suggestions button')];
+    return b.length === 1 && b[0].innerText === 'I filed it in DoorDash' && getComputedStyle(b[0]).backgroundColor === 'rgb(247, 104, 8)';
+  }));
+  check('no suggested questions, no sources line and no Sources button', await panel.evaluate(() =>
+    !/Check the food photo|What evidence is missing/.test(document.querySelector('#suggestions').innerText) &&
+    !document.querySelector('.agent-message .meta') && !document.querySelector('#evidenceView') && !/Sources|source checked|to verify/.test(document.querySelector('#thread').innerText)));
+  check('the answer keeps its copy icon', (await panel.locator('.agent-message .reply-actions [aria-label="Copy answer"]').count()) >= 1);
   await panel.waitForTimeout(400);
   await panel.screenshot({ path: path.join(out, 'panel-answer.png') });
 
-  // 3. A suggested question continues the same conversation: saved transcript, images attached again, draft carried.
-  await panel.locator('#suggestions button', { hasText: 'What evidence is missing?' }).click();
+  // 3. A follow-up question continues the same conversation: saved transcript, images attached again, draft carried.
+  await panel.fill('#prompt', 'What evidence is missing?');
+  await panel.press('#prompt', 'Enter');
   await waitFor(() => agentCalls.length > 1, 40000);
   check('follow-up resumes the saved transcript', agentCalls[1]?.transcript.length === 2, String(agentCalls[1]?.transcript.length));
   check('follow-up has the images again, without the panel re-uploading them', agentCalls[1]?.images.length === agentCalls[0].images.length && !('screenshots' in JSON.parse(pi.bodies.filter((b) => b.url.endsWith('/messages')).at(-1).raw)));
@@ -481,6 +489,8 @@ try {
 
   // 7. New chat on a different order, on an address the manifest does not list and a layout the parser does not know.
   await panel.click('#newChat');
+  const newLabels = await panel.evaluate(() => ['#newChat', '#drawerNewChat'].map((s) => document.querySelector(s).textContent.replace(/\s+/g, ' ').trim()));
+  check('the top bar button reads "New Dispute"', newLabels.every((t) => t === 'New Dispute'), JSON.stringify(newLabels));
   check('new chat starts empty', await panel.locator('#empty').isVisible() && (await panel.locator('.agent-message').count()) === 0);
   const changed = await context.newPage();
   await changed.goto(`http://127.0.0.1:${portal2Port}/changed?orderId=ZXCV9876&storeId=555123`);
@@ -582,8 +592,11 @@ try {
   await panel.waitForTimeout(400);
   await panel.screenshot({ path: path.join(out, 'panel-ubereats.png') });
   await panel.click('#historyButton');
-  await waitFor(async () => (await panel.locator('.history-meta').allInnerTexts()).some((t) => t.startsWith('Uber Eats · Order D2D46')));
-  check('history labels the chat as Uber Eats', (await panel.locator('.history-meta').allInnerTexts()).some((t) => t.startsWith('Uber Eats · Order D2D46')));
+  await waitFor(async () => (await panel.locator('.history-item', { hasText: 'D2D46' }).count()) === 1);
+  check('history row: order ID, verdict, and "Uber Eats · date" underneath', await panel.locator('.history-item', { hasText: 'D2D46' }).evaluate((row) =>
+    row.querySelector('.history-title span').innerText === 'D2D46' && !!row.querySelector('.history-chip') && /^Uber Eats · \S/.test(row.querySelector('.history-meta').innerText) && !/Order/.test(row.innerText)));
+  await panel.waitForTimeout(300);
+  await panel.screenshot({ path: path.join(out, 'panel-history-rows.png') });
   await panel.click('#closeHistory');
   await uber.screenshot({ path: path.join(out, 'ubereats-mock.png') });
   writeFileSync(path.join(out, 'ubereats-captured.jpg'), Buffer.from(u.image.split(',')[1], 'base64'));

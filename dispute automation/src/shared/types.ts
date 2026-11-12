@@ -114,8 +114,6 @@ export interface CaptureContext {
   photoCount: number;
   /** For each of those photos, the link to its full-size original (DoorDash), or null. */
   photoLinks?: (string | null)[];
-  /** Something the operator can do on the page for a better capture, such as expanding collapsed feedback. */
-  hint: string | null;
 }
 
 /** One customer photo, scrolled into view and measured, ready to be cropped from a screenshot. */

@@ -13,8 +13,9 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
       </button>
       <button class="order-chip" id="orderChip" type="button" aria-controls="caseMeta" aria-expanded="false" hidden></button>
-      <button class="icon-button" id="newChat" type="button" aria-label="New chat" title="New chat">
+      <button class="pill" id="newChat" type="button" title="Start a new dispute">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a1.4 1.4 0 0 1 3 3l-9 9a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></svg>
+        <span>New Dispute</span>
       </button>
     </header>
 
@@ -52,7 +53,7 @@
         </div>
         <textarea id="prompt" rows="1" placeholder="Ask about this order" aria-label="Message"></textarea>
         <div class="composer-row">
-          <button class="capture-pill" id="capture" type="button" title="Attach this page">
+          <button class="pill capture-pill" id="capture" type="button" title="Attach this page">
             <svg class="when-idle" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
             <svg class="when-captured" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             <span id="captureLabel">Screenshot</span>
@@ -74,7 +75,7 @@
       </div>
       <button class="drawer-row" id="drawerNewChat" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a1.4 1.4 0 0 1 3 3l-9 9a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></svg>
-        <span>New chat</span>
+        <span>New Dispute</span>
       </button>
       <div class="drawer-label">Chats</div>
       <div class="history-list" id="historyList"></div>
@@ -86,16 +87,6 @@
         </button>
       </div>
     </aside>
-
-    <section class="sheet" id="evidenceView" aria-labelledby="evidenceHeading" hidden>
-      <div class="sheet-head">
-        <button class="icon-button" id="closeEvidence" type="button" aria-label="Back to chat" title="Back">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-        </button>
-        <h2 id="evidenceHeading">Sources</h2>
-      </div>
-      <div class="sheet-body" id="evidenceBody"></div>
-    </section>
 
     <section class="sheet" id="settingsPanel" aria-labelledby="settingsHeading" hidden>
       <div class="sheet-head">
