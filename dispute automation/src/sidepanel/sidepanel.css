@@ -119,8 +119,6 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .assessment.goodwill{background:var(--goodwill-bg);color:var(--goodwill)}
 .assessment.needs_review{background:var(--warning-bg);color:var(--warning)}
 .assessment.do_not_dispute{background:var(--neutral-bg);color:var(--neutral)}
-.reply-actions{display:flex;align-items:center;gap:2px;margin-left:-6px}
-.reply-actions .icon-button{color:var(--text-muted)}
 .text-button{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 8px;border-radius:8px;color:var(--text-secondary);font-size:13px;
   transition:background-color .15s var(--ease),color .15s var(--ease)}
 .text-button svg{width:16px;height:16px}
@@ -147,7 +145,7 @@ svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 @keyframes shimmer{from{background-position:100% 0}to{background-position:0 0}}
 @keyframes word-in{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:none}}
 
-.suggestions{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:16px}
+.suggestions{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px}
 .suggestions button{max-width:100%;min-height:32px;padding:6px 12px;border:1px solid var(--border);border-radius:16px;color:var(--text-secondary);font-size:13px;text-align:left;
   transition:background-color .15s var(--ease),color .15s var(--ease),transform .15s ease-out}
 .suggestions button:active{transform:scale(.96)}

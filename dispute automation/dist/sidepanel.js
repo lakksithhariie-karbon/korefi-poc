@@ -437,12 +437,8 @@
     const verdict=document.createElement('span');verdict.className=`assessment ${result.recommendation}`;
     const big=document.createElement('span');big.className='big';big.textContent=VERDICT[result.recommendation]||'Review';verdict.append(big);
     const p=document.createElement('p');p.className='agent-text';p.textContent=result.reasoning_summary||'No reason was given.';
-    const actions=document.createElement('div');actions.className='reply-actions';
-    const copyBtn=document.createElement('button');copyBtn.type='button';copyBtn.className='icon-button';copyBtn.title='Copy';copyBtn.setAttribute('aria-label','Copy answer');copyBtn.innerHTML=icon('copy');
-    copyBtn.addEventListener('click',async()=>{if(await copy(result.reasoning_summary||'')){copyBtn.innerHTML=icon('check');setTimeout(()=>{copyBtn.innerHTML=icon('copy');},1500);}});
-    actions.append(copyBtn);
     el.append(verdict,p);if(result.draft_text)el.append(draftBlock(result.draft_text));
-    el.append(actions);$thread.append(el);
+    $thread.append(el);
     return el;
   }
   // The draft sits in the chat as a block to copy. Edit changes it in place; the last copied or edited text is what gets filed.
@@ -511,8 +507,7 @@
     const late=(el,delay)=>{if(!el)return;el.classList.add('late');el.style.animationDelay=`${Math.round(delay)}ms`;
       setTimeout(()=>{el.classList.remove('late');el.style.animationDelay='';},delay+400);};
     if(body){late(body.closest('.draft-block'),at);at=wordsIn(body,at+150,step);}
-    late(card.querySelector(':scope > .reply-actions'),at);
-    late($('suggestions'),at+100);
+    late($('suggestions'),at);
   }
   async function run(question){
     if(!current||busy)return;

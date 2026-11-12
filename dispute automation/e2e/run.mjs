@@ -404,7 +404,11 @@ try {
   check('no suggested questions, no sources line and no Sources button', await panel.evaluate(() =>
     !/Check the food photo|What evidence is missing/.test(document.querySelector('#suggestions').innerText) &&
     !document.querySelector('.agent-message .meta') && !document.querySelector('#evidenceView') && !/Sources|source checked|to verify/.test(document.querySelector('#thread').innerText)));
-  check('the answer keeps its copy icon', (await panel.locator('.agent-message .reply-actions [aria-label="Copy answer"]').count()) >= 1);
+  check('no copy icon under the answer; the orange button sits right below the draft', await panel.evaluate(() => {
+    const draft = [...document.querySelectorAll('.draft-block')].pop().getBoundingClientRect();
+    const btn = document.querySelector('#suggestions button').getBoundingClientRect();
+    return !document.querySelector('[aria-label="Copy answer"]') && !document.querySelector('.reply-actions') && btn.top - draft.bottom >= 8 && btn.top - draft.bottom <= 40;
+  }));
   await panel.waitForTimeout(400);
   await panel.screenshot({ path: path.join(out, 'panel-answer.png') });
 
