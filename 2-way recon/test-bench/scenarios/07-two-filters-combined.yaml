@@ -1,0 +1,36 @@
+# Two allowed filters in one request.
+version: 1
+id: payout-custom-two-filters
+title: "Owner asks for the issues Excel for one app at one store"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [customise, create_artifact]
+  patterns: [single_turn, combined_filters, artifact]
+restaurant: Harbor Tea
+pos: Square
+period:
+  from: 2026-10-19
+  to: 2026-10-25
+skill: skills/payout-reconciliation.md
+data:
+  - data/week-2026-10-19/reconciliation_result.json
+  - data/week-2026-10-19/orders.csv
+runs: 30
+conversation:
+  - id: doordash-downtown-excel
+    user: "Give me the Excel with just the DoorDash orders at Downtown."
+    expect:
+      artifact:
+        type: excel
+        rows: 5
+        order_ids: [6F5CF287, 4107CE2A, B20C9D2D, 4C90C117, 4EF2E3A1]
+        total_amount: "91.74"
+        stores: [Downtown]
+        apps: [DoorDash]
+      response:
+        judge: llm
+        criteria: |-
+          Produces an Excel file with exactly the 5 DoorDash orders at Downtown not recorded in Square, totalling $91.74.
+          Leaves out the Uber Eats order at Downtown (AC51D) and every order from other stores.
+          The chat reply is short and says what the file contains.

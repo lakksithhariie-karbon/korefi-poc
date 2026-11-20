@@ -1,0 +1,53 @@
+# The scheduled Thursday run. No user message: the agent writes the weekly summary.
+version: 1
+id: payout-weekly-summary
+title: "Thursday summary for a week with 8 orders not recorded in the POS"
+use_case: payout-reconciliation
+classification:
+  trigger: scheduled
+  goals: [summarise]
+  patterns: [single_turn, grounded_numbers, no_false_alarms]
+restaurant: Harbor Tea
+pos: Square
+period:
+  from: 2026-10-19
+  to: 2026-10-25
+skill: skills/payout-reconciliation.md
+data:
+  - data/week-2026-10-19/reconciliation_result.json
+  - data/week-2026-10-19/orders.csv
+runs: 30
+conversation:
+  - id: summary
+    trigger: scheduled
+    expect:
+      facts:              # each value must appear in the message
+        orders_checked: 477
+        orders_matched: 469
+        orders_not_in_pos: 8
+        not_in_pos_amount: "145.08"
+        store_with_most: Downtown
+        store_with_most_count: 6
+      must_not_mention:   # explained items and chargebacks are not issues
+        - "65C9B"
+        - "error charge"
+      max_words: 120
+      artifact:             # the standard issues file that comes with every run
+        type: excel
+        name: orders-to-look-at
+        rows: 8
+        total_amount: "145.08"
+        columns_include: [app, store, order_date, order_time, order_id, app_amount, issue]
+      response:
+        judge: llm
+        criteria: |-
+          Leads with 8 delivery orders not recorded in the POS, worth $145.08, out of 477 checked.
+          Says Downtown has 6 of the 8, and names Northside and Westside with 1 each.
+          Words the issue as "not recorded in your POS" or similar, not as money lost or unpaid.
+          Suggests a next step in plain words, such as checking the delivery tablet or integration at Downtown.
+          Says the full list is available to download as an Excel file.
+          Does not say who the list should be sent to.
+          May note that most of the 8 were placed around midday opening time; if it does, the claim must match the order times.
+          Does not raise the unfulfilled Uber Eats order or the 3 DoorDash error charges as issues.
+          Does not report any wrong amount or unusual fee, because there are none this week.
+          Uses no technical terms such as time zone, order reference or matching logic.
