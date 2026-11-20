@@ -1,0 +1,4 @@
+Order DO-DD08-foreign-object-unclear
+Error charge: $7.25 for a reported foreign object.
+The customer supplied one low-detail photo.
+Dispute charge

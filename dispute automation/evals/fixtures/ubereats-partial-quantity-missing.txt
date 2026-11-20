@@ -1,0 +1,5 @@
+Order UB-UE03-partial-quantity-missing
+Ordered 3 samosas.
+Customer reported 1 of 3 samosas missing.
+Adjustment: $2.75.
+Dispute

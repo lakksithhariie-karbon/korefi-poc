@@ -5,3 +5,4 @@ e2e/out
 e2e/out-access
 .env
 .env.*
+__pycache__

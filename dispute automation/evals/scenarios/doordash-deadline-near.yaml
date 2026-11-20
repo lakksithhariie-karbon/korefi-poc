@@ -1,0 +1,38 @@
+id: doordash-deadline-near
+coverage: DD-04
+source: PostgreSQL DB (adapted)
+input:
+  query: help me dispute
+  page_text: doordash-deadline-near.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 8.39
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.39
+      errorCharges:
+      - item: Mango Mastani Lassi (Beverages)
+        amount: -8.39
+        reason: Missing entire item
+      items:
+      - name: Pani-Puri (Chaats)
+        quantity: 1
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Mango Mastani Lassi (Beverages)
+        quantity: 1
+      - name: Pav Bhaji (Roadside Curries)
+        quantity: 1
+      - name: Vadapav (Chaats)
+        quantity: 1
+    order_id: DO-DD04-deadline-near
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: deadline
+    criterion: Say the dispute route is open and one day remains, without substituting a deadline based
+      on the evaluation date.
+input_notes: Real missing-item charge with a hypothetical portal deadline for this variant.

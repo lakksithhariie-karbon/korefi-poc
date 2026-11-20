@@ -1,0 +1,20 @@
+id: "ubereats-partial-quantity-missing"
+coverage: "UE-03"
+source: "synthetic"
+input:
+  query: null
+  page_text: "ubereats-partial-quantity-missing.txt"
+  capture:
+    platform: "ubereats"
+    issue_category: "Missing item"
+    dispute_amount: 2.75
+    structured_facts:
+      disputeStatus: "available"
+    order_id: "UB-UE03-partial-quantity-missing"
+expected:
+  recommendation: "dispute"
+  draft: "present"
+  customer_comment: null
+  rubric:
+    - id: "affected_quantity"
+      criterion: "Distinguish three ordered from one reported missing, and keep the $2.75 adjustment and draft scoped to the one missing unit."

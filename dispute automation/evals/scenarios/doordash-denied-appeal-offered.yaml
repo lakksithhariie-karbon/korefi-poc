@@ -1,0 +1,22 @@
+id: "doordash-denied-appeal-offered"
+coverage: "DD-06"
+source: "synthetic"
+input:
+  query: null
+  page_text: "doordash-denied-appeal-offered.txt"
+  capture:
+    platform: "doordash"
+    issue_category: "Missing item"
+    dispute_amount: 45
+    structured_facts:
+      disputeStatus: "denied"
+    order_id: "DO-DD06-denied-appeal-offered"
+expected:
+  recommendation: "dispute"
+  draft: "present"
+  customer_comment: null
+  rubric:
+    - id: "appeal_route"
+      criterion: "Recommend using the visible Appeal decision action and write for an appeal of the denial."
+    - id: "supporting_evidence"
+      criterion: "Use the packing record as support. Do not claim a file was uploaded or guarantee recovery."

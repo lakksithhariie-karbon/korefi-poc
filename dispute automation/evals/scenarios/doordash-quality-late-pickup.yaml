@@ -1,0 +1,33 @@
+id: doordash-quality-late-pickup
+coverage: DD-07
+source: PostgreSQL DB (adapted)
+input:
+  query: null
+  page_text: doordash-quality-late-pickup.txt
+  capture:
+    platform: doordash
+    issue_category: Food quality
+    dispute_amount: 15.11
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -15.11
+      errorCharges:
+      - item: Paneer Butter Masala (Roadside Curries)
+        amount: -14.4
+      items:
+      - name: Paneer Butter Masala (Roadside Curries)
+        quantity: 2
+      pickedUp:
+        actual: 6:48 pm
+        quoted: 6:32 pm
+    order_id: DO-DD07-quality-late-pickup
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: pickup_delay
+    criterion: Identify 6:32 PM and 6:48 PM as quoted and actual pickup and state the 16-minute delay.
+      Treat the delay as relevant evidence, without asserting it proved the cause.
+input_notes: Real food-quality charge and pickup times. The captured route was closed. This variant makes
+  the dispute route open to isolate the delay calculation.

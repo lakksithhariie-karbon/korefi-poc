@@ -1,0 +1,35 @@
+id: ubereats-closed-contact-support
+coverage: UE-04
+source: PostgreSQL DB
+input:
+  query: Can i dispute?
+  page_text: ubereats-closed-contact-support.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported wrong
+    dispute_amount: 9.5
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -9.5
+      errorCharges:
+      - item: '*TW 22'' Champion Milk Tea'
+        amount: -9.5
+        reason: Item reported wrong
+      items:
+      - name: '*Yuzu Osmanthus'
+        quantity: 1
+      - name: '*TW 22'' Champion Milk Tea'
+        quantity: 1
+      - name: '*Icy Peak Milk Tea'
+        quantity: 1
+      - name: '*TW 22'' Champion Milk Tea'
+        quantity: 1
+    order_id: UB-UE04-closed-contact-support
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: support_route
+    criterion: Lead with the closed dispute route, identify the visible Contact support option, and write
+      the draft for support rather than the dispute form.

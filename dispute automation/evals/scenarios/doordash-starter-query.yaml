@@ -1,0 +1,40 @@
+id: doordash-starter-query
+coverage: SH-07
+source: PostgreSQL DB
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: doordash-starter-query.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 15.58
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -15.58
+      errorCharges:
+      - item: Samosa ( 2 Pieces ) (Chaats)
+        amount: -4.79
+        reason: Missing entire item
+      - item: Rose Falooda (Beverages)
+        amount: -10.79
+        reason: Missing entire item
+      items:
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Rose Falooda (Beverages)
+        quantity: 1
+      - name: Malaysian Paratha (Breads & Extras)
+        quantity: 2
+      - name: Australian Fry (Roadside Curries)
+        quantity: 1
+    order_id: DO-SH07-starter-query
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: initial_case
+    criterion: Identify both reported missing items and the $15.58 charge. Draft from the supplied facts
+      without inventing proof of packing.
+input_notes: Curated real open charge, order items, and initial operator query. The DoorDash default-starter
+  example uses the same standard starter wording as the UI.

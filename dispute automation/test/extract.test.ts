@@ -62,6 +62,11 @@ test('rules: already approved charge is decided', () => {
   assert.equal(facts.daysLeft, 9);
 });
 
+test('"Unable to dispute" in the header marks the charge as not disputable', () => {
+  const { snapshot } = parseOrder(open.replace(/^Completed$/m, 'Completed\nUnable to dispute'));
+  assert.equal(snapshot.disputeStatus, 'unavailable');
+});
+
 test('rules: open charge has days left, amount and fault hint', () => {
   const { snapshot } = parseOrder(open);
   assert.equal(snapshot.disputeStatus, null);

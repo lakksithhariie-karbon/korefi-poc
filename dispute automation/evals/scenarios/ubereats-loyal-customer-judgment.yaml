@@ -1,0 +1,41 @@
+id: ubereats-loyal-customer-judgment
+coverage: SH-02
+source: PostgreSQL DB (adapted)
+input:
+  query: Should we dispute or ask for goodwill? Can you draft a goodwill option?
+  page_text: ubereats-loyal-customer-judgment.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 2.25
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -2.25
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -2.25
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH02-loyal-customer-judgment
+expected:
+  recommendation: goodwill
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: operator_judgment
+    criterion: Explain the evidence-based arguments for both a dispute and goodwill, and make clear that
+      the operator makes the choice.
+input_notes: Real order and missing item with a scripted repeat-customer profile. The charge is reduced
+  for the small-charge variant.

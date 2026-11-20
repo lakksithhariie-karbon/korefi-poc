@@ -1,0 +1,51 @@
+id: ubereats-follow-up-add-pos-fact
+coverage: SH-08
+source: PostgreSQL DB (adapted)
+input:
+  query: null
+  page_text: ubereats-follow-up-add-pos-fact.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.6
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.6
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -8.6
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH08-follow-up-add-pos-fact
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: initial_case
+    criterion: Identify the missing Brownie with ice-cream and $8.60 charge. Draft from the supplied facts
+      without inventing proof of packing.
+follow_ups:
+- input:
+    query: Our POS shows the Brownie with ice-cream was ready at 6:30 PM. Please add that to the draft.
+  expected:
+    answer_format: plain_text
+    draft: revise
+    rubric:
+    - id: pos_attribution
+      criterion: Include the 6:30 PM ready time as the store’s POS record without claiming a POS ticket
+        was attached or the item was packed.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

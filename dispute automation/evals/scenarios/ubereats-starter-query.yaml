@@ -1,0 +1,41 @@
+id: ubereats-starter-query
+coverage: SH-07
+source: PostgreSQL DB
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: ubereats-starter-query.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.6
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.6
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -8.6
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH07-starter-query
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: initial_case
+    criterion: Identify the missing Brownie with ice-cream and $8.60 charge. Draft from the supplied facts
+      without inventing proof of packing.
+input_notes: Curated real open charge, order items, and initial operator query. The DoorDash default-starter
+  example uses the same standard starter wording as the UI.

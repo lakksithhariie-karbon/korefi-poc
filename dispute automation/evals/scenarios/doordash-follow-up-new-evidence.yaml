@@ -1,0 +1,52 @@
+id: doordash-follow-up-new-evidence
+coverage: SH-12
+source: PostgreSQL DB (adapted)
+input:
+  query: null
+  page_text: doordash-follow-up-new-evidence.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 8.39
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -8.39
+      errorCharges:
+      - item: Mango Mastani Lassi (Beverages)
+        amount: -8.39
+        reason: Missing entire item
+      items:
+      - name: Pani-Puri (Chaats)
+        quantity: 1
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Mango Mastani Lassi (Beverages)
+        quantity: 1
+      - name: Pav Bhaji (Roadside Curries)
+        quantity: 1
+      - name: Vadapav (Chaats)
+        quantity: 1
+    order_id: DO-SH12-follow-up-new-evidence
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: initial_case
+    criterion: Identify the missing Mango Mastani Lassi and $8.39 charge. Draft from the supplied facts
+      without inventing proof of packing.
+follow_ups:
+- input:
+    query: I attached the final packing record. What changes?
+    additional_text: 'Final packing audit: the Mango Mastani Lassi was left at the store and was never
+      handed over.'
+  expected:
+    answer_format: plain_text
+    draft: revise
+    recommendation: goodwill
+    rubric:
+    - id: changed_evidence
+      criterion: Recognize that the new record supports the customer’s account. Change the recommendation
+        to goodwill and draft a goodwill request.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

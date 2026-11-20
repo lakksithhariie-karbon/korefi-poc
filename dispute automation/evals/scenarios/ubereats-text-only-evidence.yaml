@@ -1,0 +1,41 @@
+id: ubereats-text-only-evidence
+coverage: SH-04
+source: PostgreSQL DB (adapted)
+input:
+  query: The screenshot did not come through. Can you assess this from the order text?
+  page_text: ubereats-text-only-evidence.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.6
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.6
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -8.6
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH04-text-only-evidence
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: text_only
+    criterion: Use the supplied page text and acknowledge that there is no usable screenshot. Do not describe
+      a photo or visual detail.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

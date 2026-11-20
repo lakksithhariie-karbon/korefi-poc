@@ -1,0 +1,20 @@
+id: "ubereats-pickup-missing-item"
+coverage: "UE-07"
+source: "synthetic"
+input:
+  query: null
+  page_text: "ubereats-pickup-missing-item.txt"
+  capture:
+    platform: "ubereats"
+    issue_category: "Missing item"
+    dispute_amount: 7.25
+    structured_facts:
+      disputeStatus: "available"
+    order_id: "UB-UE07-pickup-missing-item"
+expected:
+  recommendation: "dispute"
+  draft: "present"
+  customer_comment: null
+  rubric:
+    - id: "pickup"
+      criterion: "Identify customer pickup and give no claims about a courier, delivery, or a verified pickup handoff."

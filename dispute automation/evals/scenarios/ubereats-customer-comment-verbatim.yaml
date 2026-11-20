@@ -1,0 +1,40 @@
+id: ubereats-customer-comment-verbatim
+coverage: SH-06
+source: PostgreSQL DB (adapted)
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: ubereats-customer-comment-verbatim.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.6
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.6
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -8.6
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH06-customer-comment-verbatim
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: The Brownie with ice-cream was missing.
+  rubric:
+  - id: comment_source
+    criterion: Distinguish the customer comment from the merchant note.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

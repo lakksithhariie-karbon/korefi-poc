@@ -1,0 +1,24 @@
+id: doordash-no-order-captured
+coverage: SH-05
+source: PostgreSQL DB
+input:
+  query: null
+  page_text: doordash-no-order-captured.txt
+  capture:
+    platform: doordash
+    issue_category: null
+    dispute_amount: null
+    structured_facts:
+      disputeStatus: null
+entry_point: sidebar_capture
+expected:
+  recommendation: null
+  draft: absent
+  customer_comment: null
+  rubric:
+  - id: capture_feedback
+    criterion: Ask the operator to open an order page or recapture an identifiable order. Give no order-specific
+      assessment.
+  agent_called: false
+input_notes: Curated labels from a captured DoorDash page with no identifiable order, order items, or
+  error charge.

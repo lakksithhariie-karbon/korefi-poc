@@ -1,0 +1,40 @@
+id: ubereats-custom-query
+coverage: SH-07
+source: PostgreSQL DB (adapted)
+input:
+  query: Which item was reported missing, and which item was unaffected?
+  page_text: ubereats-custom-query.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.6
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.6
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -8.6
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH07-custom-query
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: answer_question
+    criterion: Answer which item was reported missing and which item was unaffected, using the order lines.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

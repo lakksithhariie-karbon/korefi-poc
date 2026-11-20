@@ -1,0 +1,33 @@
+id: doordash-foreign-object-on-packaging
+coverage: DD-08
+source: PostgreSQL DB (adapted)
+input:
+  query: null
+  page_text: doordash-foreign-object-on-packaging.txt
+  capture:
+    platform: doordash
+    issue_category: Foreign object
+    dispute_amount: 9.89
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -9.89
+      errorCharges:
+      - item: Paneer Masala Sandwich ("Bombay" Grill Sandwiches)
+        amount: -9.89
+      items:
+      - name: Paneer Masala Sandwich ("Bombay" Grill Sandwiches)
+        quantity: 1
+    order_id: DO-DD08-foreign-object-on-packaging
+  customer_photos:
+  - doordash-packaging-real.jpg
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: photo_reading
+    criterion: Locate the dark strand on the inside of the lid above the sandwich. Do not say it is in
+      the food or assert where it originated.
+    requires_images: true
+input_notes: Real customer photo, item, and charge. The original dispute had already been denied. This
+  variant supplies an open route to isolate interpretation of the photo.

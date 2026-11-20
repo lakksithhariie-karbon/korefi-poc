@@ -11,15 +11,16 @@ import { createMemoryStore } from './memory-store.mjs';
 const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 const base = { api: 'openai-responses', provider: 'openai', model: 'fake', usage, timestamp: Date.now() };
 
-/** Answers each prompt with the next draft from `drafts`, never calling a tool. Records the prompts it saw. */
+/** Answers each prompt with the next draft from `drafts` (a string, or an object of extra answer fields), never calling a tool. Records the prompts it saw. */
 function fakeModel(drafts) {
   const prompts = [];
   let n = 0;
   const streamFn = (_model, context) => {
     const lastUser = [...context.messages].reverse().find((m) => m.role === 'user');
     prompts.push(JSON.stringify(lastUser.content));
-    const draft = drafts[Math.min(n++, drafts.length - 1)];
-    const message = { ...base, role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ recommendation: 'dispute', reasoning_summary: 'r', missing_evidence: [], draft_text: draft, risk_notes: null }) }], stopReason: 'stop' };
+    const next = drafts[Math.min(n++, drafts.length - 1)];
+    const fields = typeof next === 'string' ? { draft_text: next } : next;
+    const message = { ...base, role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ recommendation: 'dispute', reasoning_summary: 'r', missing_evidence: [], risk_notes: null, ...fields }) }], stopReason: 'stop' };
     const s = createAssistantMessageEventStream();
     queueMicrotask(() => {
       s.push({ type: 'start', partial: message });
@@ -81,6 +82,15 @@ test('a draft over the limit is sent back once and the shorter one is kept', asy
   assert.equal(out.draft_text, 'y'.repeat(390));
   assert.doesNotMatch(out.risk_notes || '', /over the/);
   assert.deepEqual(logs.filter((l) => l.event.startsWith('agent_draft_')).map((l) => [l.event, l.chars, l.fits]), [['agent_draft_too_long', 430, undefined], ['agent_draft_shortened', 390, true]]);
+});
+
+test('shortening the draft keeps the first answer\'s summary line and points', async () => {
+  const first = { headline: 'Dispute the $7.99 missing-item charge', key_points: [{ label: 'Charge', text: '$7.99 for one missing drink' }], draft_text: 'x'.repeat(430) };
+  const { streamFn } = fakeModel([first, { reasoning_summary: 'Rewritten draft is now within the limit.', headline: '', key_points: [], draft_text: 'y'.repeat(390) }]);
+  const out = await run('ubereats', streamFn);
+  assert.equal(out.draft_text, 'y'.repeat(390));
+  assert.equal(out.headline, 'Dispute the $7.99 missing-item charge');
+  assert.deepEqual(out.key_points, [{ label: 'Charge', text: '$7.99 for one missing drink' }]);
 });
 
 test('a draft still too long after one retry reaches the operator with a warning', async () => {

@@ -1,0 +1,21 @@
+id: "ubereats-no-order-captured"
+coverage: "SH-05"
+source: "synthetic"
+input:
+  query: null
+  page_text: "ubereats-no-order-captured.txt"
+  capture:
+    platform: "ubereats"
+    issue_category: null
+    dispute_amount: null
+    structured_facts:
+      disputeStatus: null
+entry_point: "sidebar_capture"
+expected:
+  recommendation: null
+  draft: "absent"
+  customer_comment: null
+  rubric:
+    - id: "capture_feedback"
+      criterion: "Ask the operator to open an order page or recapture an identifiable order. Give no order-specific assessment."
+  agent_called: false

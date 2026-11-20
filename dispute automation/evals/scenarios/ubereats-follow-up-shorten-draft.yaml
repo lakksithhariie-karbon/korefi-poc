@@ -1,0 +1,50 @@
+id: ubereats-follow-up-shorten-draft
+coverage: SH-10
+source: PostgreSQL DB (adapted)
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: ubereats-follow-up-shorten-draft.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.6
+    structured_facts:
+      disputeStatus: available
+      errorChargeTotal: -8.6
+      errorCharges:
+      - item: Brownie with ice-cream
+        amount: -8.6
+        reason: Item reported missing
+      items:
+      - name: Kathi Rolls
+        quantity: 1
+      - name: Chicken butter Masala
+        quantity: 2
+      - name: Chicken Masala Sandwich
+        quantity: 1
+      - name: Brownie with ice-cream
+        quantity: 1
+      - name: Mango Lassi
+        quantity: 1
+      - name: Malaysian Paratha
+        quantity: 2
+    order_id: UB-SH10-follow-up-shorten-draft
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: initial_case
+    criterion: Identify the missing Brownie with ice-cream and $8.60 charge. Draft from the supplied facts
+      without inventing proof of packing.
+follow_ups:
+- input:
+    query: Make the draft shorter. Keep the order, Brownie with ice-cream, and $8.60 charge.
+  expected:
+    answer_format: plain_text
+    draft: shorten
+    rubric:
+    - id: preserve_facts
+      criterion: Keep the order reference, affected item, and exact amount while shortening the draft.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

@@ -1,0 +1,48 @@
+id: doordash-follow-up-missing-evidence
+coverage: SH-11
+source: PostgreSQL DB (adapted)
+input:
+  query: help me dispute
+  page_text: doordash-follow-up-missing-evidence.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 8.39
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -8.39
+      errorCharges:
+      - item: Mango Mastani Lassi (Beverages)
+        amount: -8.39
+        reason: Missing entire item
+      items:
+      - name: Pani-Puri (Chaats)
+        quantity: 1
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Mango Mastani Lassi (Beverages)
+        quantity: 1
+      - name: Pav Bhaji (Roadside Curries)
+        quantity: 1
+      - name: Vadapav (Chaats)
+        quantity: 1
+    order_id: DO-SH11-follow-up-missing-evidence
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: initial_case
+    criterion: Identify the missing Mango Mastani Lassi and $8.39 charge. Draft from the supplied facts
+      without inventing proof of packing.
+follow_ups:
+- input:
+    query: What evidence is missing?
+  expected:
+    answer_format: plain_text
+    draft: preserve
+    rubric:
+    - id: evidence_gap
+      criterion: Name useful evidence such as a packing record. Do not generate a replacement draft.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

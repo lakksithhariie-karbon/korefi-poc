@@ -1,0 +1,32 @@
+id: doordash-loyal-customer-judgment
+coverage: SH-02
+source: PostgreSQL DB (adapted)
+input:
+  query: Should we dispute or ask for goodwill? Can you draft a goodwill option?
+  page_text: doordash-loyal-customer-judgment.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 3.19
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -3.19
+      errorCharges:
+      - item: Desi Chai ( Indian Tea ) (Beverages)
+        amount: -3
+        reason: Missing entire item
+      items:
+      - name: Desi Chai ( Indian Tea ) (Beverages)
+        quantity: 1
+      - name: Paneer Schezwan Sandwich ("Bombay" Grill Sandwiches)
+        quantity: 1
+    order_id: DO-SH02-loyal-customer-judgment
+expected:
+  recommendation: goodwill
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: operator_judgment
+    criterion: Explain the evidence-based arguments for both a dispute and goodwill, and make clear that
+      the operator makes the choice.
+input_notes: Real order and missing item with a scripted repeat-customer profile.

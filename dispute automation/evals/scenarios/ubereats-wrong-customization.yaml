@@ -1,0 +1,20 @@
+id: "ubereats-wrong-customization"
+coverage: "UE-02"
+source: "synthetic"
+input:
+  query: null
+  page_text: "ubereats-wrong-customization.txt"
+  capture:
+    platform: "ubereats"
+    issue_category: "Customization reported wrong"
+    dispute_amount: 6.5
+    structured_facts:
+      disputeStatus: "available"
+    order_id: "UB-UE02-wrong-customization"
+expected:
+  recommendation: "goodwill"
+  draft: "present"
+  customer_comment: null
+  rubric:
+    - id: "affected_modifier"
+      criterion: "Identify the no-onions wrap, the reported onions, quantity one, and the $6.50 adjustment. Keep the extra-onions wrap separate."

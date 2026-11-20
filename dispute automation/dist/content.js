@@ -128,7 +128,8 @@
     const header = lines.slice(Math.max(iOrder, 0) + 1, headerEnd);
     const status = header.find((l) => /^(Completed|Cancelled|Canceled|Refunded|In progress|Active|Scheduled)$/i.test(l)) ?? null;
     const disputeChip = header.find((l) => DISPUTE_CHIP.test(l));
-    const disputeStatus = disputeChip ? disputeChip.replace(/^Dispute /i, "").toLowerCase() : null;
+    const unable = header.some((l) => /^Unable to dispute$/i.test(l));
+    const disputeStatus = disputeChip ? disputeChip.replace(/^Dispute /i, "").toLowerCase() : unable ? "unavailable" : null;
     const notice = header.find((l) => l.length > 30 && /dispute/i.test(l)) ?? null;
     const dEnd = iDetails >= 0 ? iDetails : lines.length;
     const iCustomer = find((l) => l === "Customer", iDelivery, dEnd);

@@ -1,0 +1,9 @@
+source: PostgreSQL DB
+scenarios:
+  - doordash-missing-item
+  - ubereats-wrong-item
+  - doordash-already-credited
+repeats: 3
+judge:
+  model: grok-4.7-high
+  timeout_ms: 90000

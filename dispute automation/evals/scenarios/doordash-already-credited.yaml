@@ -1,0 +1,29 @@
+id: doordash-already-credited
+coverage: DD-02
+source: PostgreSQL DB
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: doordash-already-credited.txt
+  capture:
+    platform: doordash
+    order_id: DDEVAL03
+    issue_category: Missing entire item
+    dispute_amount: 9.59
+    structured_facts:
+      disputeStatus: approved
+      errorChargeTotal: -9.59
+      errorCredit: 9.59
+      errorCharges:
+        - item: Rabadi Falooda (Beverages)
+          amount: -9.59
+          reason: Missing entire item
+          disputeStatus: approved
+expected:
+  recommendation: do_not_dispute
+  draft: absent
+  customer_comment: null
+  rubric:
+    - id: credit_explained
+      criterion: The answer leads with DoorDash approving the dispute and showing a $9.59 credit for the charge.
+    - id: no_refiling
+      criterion: The answer gives no advice to file again or pursue an appeal or support request for the already-credited charge.

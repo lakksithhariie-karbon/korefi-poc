@@ -44,6 +44,15 @@ test('the agent reads the platform\'s own dispute rules on the page first', () =
   assert.match(INSTRUCTIONS, /Never tell the operator to use a Dispute button the page does not show/);
 });
 
+test('fixes from the first eval round are in the instructions', () => {
+  assert.match(INSTRUCTIONS, /A DENIED DISPUTE WITH NO APPEAL OPTION ON THE PAGE IS CLOSED/);
+  assert.match(INSTRUCTIONS, /Never suggest an appeal, a new dispute or a support route the page does not show/);
+  assert.match(INSTRUCTIONS, /clear substitution photo: recommend goodwill\. A missing order label or sealed packaging does not outweigh it/);
+  assert.match(INSTRUCTIONS, /Batch Logic only when the ticket shows several of the same item made the same way, never for different items/);
+  assert.match(INSTRUCTIONS, /Menu Description vs Platform Image only when the page or the operator shows the menu description/);
+  assert.match(INSTRUCTIONS, /a draft made only of standard practices is too generic to win/);
+});
+
 test('a closed dispute window on the page is put in front of the agent; an open one is not mistaken for closed', () => {
   const base = { platform: 'ubereats', storeId: 's1', orderId: '365D6', conversation: [], screenshots: [], amount: 2 };
   const closed = buildPrompt({ ...base, facts: { notice: 'Customer had reported they didn’t receive their order. Refunds on orders placed more than 30 days ago can’t be disputed. Contact support if you think we got this wrong.' }, redactedText: '' });
@@ -53,4 +62,14 @@ test('a closed dispute window on the page is put in front of the agent; an open 
   assert.doesNotMatch(open, /route for this charge is closed/);
   assert.match(open, /The page shows a Dispute button for this charge/);
   assert.doesNotMatch(open, /DoorDash/, 'an Uber Eats prompt does not mention DoorDash');
+});
+
+test('DoorDash\'s "Unable to dispute" label closes the dispute route, even with a "Dispute charge" line on the page', () => {
+  const base = { platform: 'doordash', storeId: 's1', orderId: '2E839E0A', conversation: [], screenshots: [], amount: 15.11, facts: {} };
+  const closed = buildPrompt({ ...base, redactedText: 'Order: 2E839E0A\nCompleted\nUnable to dispute\n1 item quality issue reported\nDispute charge' });
+  assert.match(closed, /The page says: "Unable to dispute" The platform's dispute route for this charge is closed/);
+  assert.match(closed, /does not reopen it/);
+  assert.match(closed, /If the page offers no other route, recommend do_not_dispute/);
+  const open = buildPrompt({ ...base, redactedText: 'Order: 2E839E0A\nCompleted\nWe are unable to dispute claims on your behalf without photos.\nDispute charge' });
+  assert.doesNotMatch(open, /route for this charge is closed/, 'only the label on its own line counts');
 });

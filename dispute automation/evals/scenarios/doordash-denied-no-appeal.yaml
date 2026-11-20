@@ -1,0 +1,28 @@
+id: doordash-denied-no-appeal
+coverage: DD-05
+source: PostgreSQL DB
+input:
+  query: how can i dispute for this
+  page_text: doordash-denied-no-appeal.txt
+  capture:
+    platform: doordash
+    issue_category: Missing item
+    dispute_amount: 5.0
+    structured_facts:
+      disputeStatus: denied
+      errorChargeTotal: -5.0
+      errorCharges:
+      - item: Tandoori Chicken Kabob with Rice (Our Khasiyat (Our Specials))
+        amount: -5
+      items:
+      - name: Tandoori Chicken Kabob with Rice (Our Khasiyat (Our Specials))
+        quantity: 1
+    order_id: DO-DD05-denied-no-appeal
+expected:
+  recommendation: do_not_dispute
+  draft: absent
+  customer_comment: null
+  rubric:
+  - id: no_appeal
+    criterion: Say the dispute was denied and the visible page offers no appeal. Do not propose filing
+      an appeal.

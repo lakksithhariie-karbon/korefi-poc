@@ -1,0 +1,32 @@
+id: doordash-missing-item
+coverage: DD-01
+source: PostgreSQL DB
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: doordash-missing-item.txt
+  capture:
+    platform: doordash
+    order_id: DDEVAL01
+    issue_category: Missing entire item
+    dispute_amount: 15.58
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -15.58
+      errorCharges:
+        - item: Samosa ( 2 Pieces ) (Chaats)
+          amount: -4.79
+          reason: Missing entire item
+        - item: Rose Falooda (Beverages)
+          amount: -10.79
+          reason: Missing entire item
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+    - id: charge_and_issue
+      criterion: The answer identifies the $15.58 total and both reported missing items, Samosa and Rose Falooda, with their individual charges of $4.79 and $10.79.
+    - id: dispute_route
+      criterion: The answer directs the operator to the available Dispute charge option and does not imply KoreFi has filed.
+    - id: grounded_draft
+      criterion: The draft addresses both missing items and requests reversal using the supplied facts or the store's standard checks, without claiming anyone verified that these specific items were packed.

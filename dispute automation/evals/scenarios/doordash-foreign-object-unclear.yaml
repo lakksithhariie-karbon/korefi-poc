@@ -1,0 +1,23 @@
+id: "doordash-foreign-object-unclear"
+coverage: "DD-08"
+source: "synthetic"
+input:
+  query: null
+  page_text: "doordash-foreign-object-unclear.txt"
+  capture:
+    platform: "doordash"
+    issue_category: "Foreign object"
+    dispute_amount: 7.25
+    structured_facts:
+      disputeStatus: "available"
+    order_id: "DO-DD08-foreign-object-unclear"
+  customer_photos:
+    - "doordash-packaging-unclear.png"
+expected:
+  recommendation: "dispute"
+  draft: "present"
+  customer_comment: null
+  rubric:
+    - id: "photo_reading"
+      criterion: "Explain that the object cannot be confidently located or identified. Do not claim the image disproves the complaint."
+      requires_images: true

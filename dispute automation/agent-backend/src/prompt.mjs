@@ -2,8 +2,9 @@ import { DRAFT_LIMITS, UNRESOLVED_STORE } from './constants.mjs';
 
 const NAMES = { doordash: 'DoorDash', ubereats: 'Uber Eats', grubhub: 'Grubhub' };
 const HISTORY_NOTE = "There are no platform order records to search for this order. The only history is KoreFi's own past cases at this store, from find_similar_disputes. Do not mention other platforms.";
-// A notice that the platform's own dispute route is closed, such as Uber Eats' "can't be disputed" after 30 days.
-const CLOSED = /\b(?:can(?:no|'|’)?t|cannot|can no longer|no longer) be disputed\b|\bdispute (?:window|period) (?:has )?(?:closed|expired|ended)\b/i;
+// A notice that the platform's own dispute route is closed, such as Uber Eats' "can't be disputed" after 30 days
+// or DoorDash's "Unable to dispute" label.
+const CLOSED = /\b(?:can(?:no|'|’)?t|cannot|can no longer|no longer) be disputed\b|\bdispute (?:window|period) (?:has )?(?:closed|expired|ended)\b|^\s*unable to dispute\s*$/i;
 
 /** The draft length rule for this platform, from the ops playbook. */
 function lengthRule(platform) {
@@ -21,7 +22,9 @@ function disputeRoute(request) {
   if (closed) {
     lines.push(
       'The page says: "' + closed.trim().slice(0, 300) + '" The platform\'s dispute route for this charge is closed. Say so first, ' +
-        'then make the case through the route the page still offers (for example Contact support) and write the draft for that route.',
+        'then make the case through the route the page still offers (for example Contact support) and write the draft for that route. ' +
+        'A route counts only when the page names it (a Contact support link or button). If the page offers no other route, recommend do_not_dispute and say so.' +
+        (/unable to dispute/i.test(closed) ? ' A "Dispute charge" button elsewhere on the page does not reopen it.' : ''),
     );
   }
   if (request.facts?.disputeStatus === 'available') lines.push('The page shows a Dispute button for this charge.');

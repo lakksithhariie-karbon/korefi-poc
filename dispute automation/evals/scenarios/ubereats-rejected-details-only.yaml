@@ -1,0 +1,47 @@
+id: ubereats-rejected-details-only
+coverage: UE-06
+source: PostgreSQL DB
+input:
+  query: Why do ypu think uber rejected our dispute?
+  page_text: ubereats-rejected-details-only.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported missing
+    dispute_amount: 8.44
+    structured_facts:
+      disputeStatus: rejected
+      errorChargeTotal: -8.44
+      errorCharges:
+      - item: Icy Peak Milk Tea
+        amount: -8.44
+        reason: Item reported missing
+      items:
+      - name: TW 23’ Golden Buddha Silk Boba
+        quantity: 1
+      - name: Icy Peak Milk Tea
+        quantity: 1
+      - name: Grapefruit Pomelo Silk Boba
+        quantity: 1
+      - name: TW 22' Champion Milk Tea
+        quantity: 1
+      - name: Yuzu Osmanthus Silk Boba
+        quantity: 1
+      - name: Grapefruit Pomelo Silk Boba
+        quantity: 1
+      - name: Everyday ODDinary Boba
+        quantity: 1
+      - name: Pistachio Matcha
+        quantity: 1
+      - name: TW 23’ Golden Buddha Silk Boba
+        quantity: 1
+      - name: TW 22' Champion Milk Tea
+        quantity: 1
+    order_id: UB-UE06-rejected-details-only
+expected:
+  recommendation: do_not_dispute
+  draft: absent
+  customer_comment: null
+  rubric:
+  - id: no_appeal
+    criterion: Identify the rejection and explain that Details does not offer an appeal. Give no appeal
+      instructions.

@@ -1,0 +1,11 @@
+{
+  "name": "korefi-dispute-evals",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "eval": "node run.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  }
+}

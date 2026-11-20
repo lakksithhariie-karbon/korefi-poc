@@ -1,0 +1,38 @@
+id: doordash-customer-comment-absent
+coverage: SH-06
+source: PostgreSQL DB (adapted)
+input:
+  query: help me dispute
+  page_text: doordash-customer-comment-absent.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 8.39
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -8.39
+      errorCharges:
+      - item: Mango Mastani Lassi (Beverages)
+        amount: -8.39
+        reason: Missing entire item
+      items:
+      - name: Pani-Puri (Chaats)
+        quantity: 1
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Mango Mastani Lassi (Beverages)
+        quantity: 1
+      - name: Pav Bhaji (Roadside Curries)
+        quantity: 1
+      - name: Vadapav (Chaats)
+        quantity: 1
+    order_id: DO-SH06-customer-comment-absent
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: no_comment
+    criterion: Treat the merchant note as a merchant note. Do not present a customer quote.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

@@ -1,0 +1,11 @@
+Dispute approved
+You disputed the error charge for this order and will receive a credit of US$9.59.
+Error charges
+Rabadi Falooda (Beverages)
+Missing entire item
+Dispute approved
+-US$9.59
+Error charge total
+-US$9.59
+Error charge credit (includes tax)
++US$9.59

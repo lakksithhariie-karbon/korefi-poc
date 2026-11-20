@@ -1,0 +1,39 @@
+id: doordash-text-only-evidence
+coverage: SH-04
+source: PostgreSQL DB (adapted)
+input:
+  query: The screenshot did not come through. Can you assess this from the order text?
+  page_text: doordash-text-only-evidence.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 8.39
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -8.39
+      errorCharges:
+      - item: Mango Mastani Lassi (Beverages)
+        amount: -8.39
+        reason: Missing entire item
+      items:
+      - name: Pani-Puri (Chaats)
+        quantity: 1
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Mango Mastani Lassi (Beverages)
+        quantity: 1
+      - name: Pav Bhaji (Roadside Curries)
+        quantity: 1
+      - name: Vadapav (Chaats)
+        quantity: 1
+    order_id: DO-SH04-text-only-evidence
+expected:
+  recommendation: dispute
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: text_only
+    criterion: Use the supplied page text and acknowledge that there is no usable screenshot. Do not describe
+      a photo or visual detail.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

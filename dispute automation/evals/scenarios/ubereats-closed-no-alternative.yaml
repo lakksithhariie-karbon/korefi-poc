@@ -1,0 +1,36 @@
+id: ubereats-closed-no-alternative
+coverage: UE-05
+source: PostgreSQL DB (adapted)
+input:
+  query: Can i dispute?
+  page_text: ubereats-closed-no-alternative.txt
+  capture:
+    platform: ubereats
+    issue_category: Item reported wrong
+    dispute_amount: 9.5
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -9.5
+      errorCharges:
+      - item: '*TW 22'' Champion Milk Tea'
+        amount: -9.5
+        reason: Item reported wrong
+      items:
+      - name: '*Yuzu Osmanthus'
+        quantity: 1
+      - name: '*TW 22'' Champion Milk Tea'
+        quantity: 1
+      - name: '*Icy Peak Milk Tea'
+        quantity: 1
+      - name: '*TW 22'' Champion Milk Tea'
+        quantity: 1
+    order_id: UB-UE05-closed-no-alternative
+expected:
+  recommendation: do_not_dispute
+  draft: absent
+  customer_comment: null
+  rubric:
+  - id: closed_route
+    criterion: Lead with the closed route and do not invent a support, dispute, or appeal action.
+input_notes: Real closed-window charge and operator question. The support link and support instructions
+  were removed to test a portal with no fallback.

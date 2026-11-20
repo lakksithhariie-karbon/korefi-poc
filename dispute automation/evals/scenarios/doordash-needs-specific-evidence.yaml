@@ -1,0 +1,40 @@
+id: doordash-needs-specific-evidence
+coverage: SH-01
+source: PostgreSQL DB (adapted)
+input:
+  query: Can you draft from what we know and tell me the one item of evidence we should verify before
+    deciding?
+  page_text: doordash-needs-specific-evidence.txt
+  capture:
+    platform: doordash
+    issue_category: Missing entire item
+    dispute_amount: 8.39
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -8.39
+      errorCharges:
+      - item: Mango Mastani Lassi (Beverages)
+        amount: -8.39
+        reason: Missing entire item
+      items:
+      - name: Pani-Puri (Chaats)
+        quantity: 1
+      - name: Samosa ( 2 Pieces ) (Chaats)
+        quantity: 1
+      - name: Mango Mastani Lassi (Beverages)
+        quantity: 1
+      - name: Pav Bhaji (Roadside Curries)
+        quantity: 1
+      - name: Vadapav (Chaats)
+        quantity: 1
+    order_id: DO-SH01-needs-specific-evidence
+expected:
+  recommendation: needs_review
+  draft: present
+  customer_comment: null
+  rubric:
+  - id: specific_evidence
+    criterion: Identify the handoff scan that would resolve whether both order bags were handed over.
+      Provide a draft limited to the verified record.
+input_notes: Real order items and charge. Scenario-specific context, query, or follow-up is scripted where
+  it differs from the recorded run.

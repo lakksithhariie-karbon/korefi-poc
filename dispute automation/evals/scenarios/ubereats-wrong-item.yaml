@@ -1,0 +1,31 @@
+id: ubereats-wrong-item
+coverage: UE-01
+source: PostgreSQL DB
+input:
+  query: Check this order’s error charge and help me dispute it.
+  page_text: ubereats-wrong-item.txt
+  customer_photos:
+    - ubereats-cola-evidence.jpg
+  capture:
+    platform: ubereats
+    order_id: UBEVAL02
+    issue_category: Item reported wrong
+    dispute_amount: 6.12
+    structured_facts:
+      disputeStatus: null
+      errorChargeTotal: -6.12
+      errorCharges:
+        - item: Desi Chai ( Indian Tea )
+          amount: -6.12
+          reason: Item reported wrong
+          customerComment: Coke
+expected:
+  recommendation: goodwill
+  draft: present
+  customer_comment: Coke
+  rubric:
+    - id: photo_reading
+      requires_images: true
+      criterion: The answer identifies the cola can in the customer photo and explains how it supports the wrong-item complaint for the two Desi Chais.
+    - id: goodwill_draft
+      criterion: The draft acknowledges the feedback, offers a process improvement, and requests a goodwill reversal without an explicit admission of fault or an unsupported claim.
