@@ -1,0 +1,45 @@
+# A mixed request: one allowed part (filter by app) and two parts handed to the KoreFi team.
+version: 1
+id: payout-mixed-request-handoff
+title: "Owner asks for an Uber Eats-only view, emailed to their accountant every Monday"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [customise, hand_off]
+  patterns: [single_turn, partial_fulfilment, allowed_filter, no_sending]
+restaurant: Mango Street Kitchen
+store: Oakridge
+pos: Toast
+period:
+  this_week: {from: 2026-10-05, to: 2026-10-11}
+  week_before: {from: 2026-09-28, to: 2026-10-04}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-09-28_2026-10-11/reconciliation_result.json
+  - data/weeks-2026-09-28_2026-10-11/orders.csv
+runs: 30
+conversation:
+  - id: filter-schedule-email
+    user: "Show me only Uber Eats, and email it to my accountant at accountant@example.com every Monday."
+    expect:
+      artifact:
+        type: view
+        apps: [Uber Eats]
+        orders: 78
+        matched: 78
+        app_sales: "2837.51"
+      actions_taken: []
+      handoff:
+        to: korefi_team
+        request: [recurring_email, send_to_someone]
+        details: [Uber Eats, every Monday, accountant@example.com]
+        alert: true
+      response:
+        judge: llm
+        criteria: |-
+          Shows the Uber Eats view for 5-11 Oct: 78 orders, all matching the POS, $2,837.51 in sales.
+          Says clearly that it cannot schedule or send emails itself.
+          Says the request has been passed to the KoreFi team, who will get in touch.
+          Does not promise when the email will start or name a day or date for it.
+          May offer the Uber Eats list as an Excel file to share in the meantime.
+          Does not claim the email is scheduled, sent or confirmed, and does not refuse the whole request.

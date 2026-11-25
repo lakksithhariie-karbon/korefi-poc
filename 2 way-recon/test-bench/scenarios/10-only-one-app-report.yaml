@@ -1,0 +1,57 @@
+# The Thursday run for 9-15 Nov at a second restaurant. Only the Uber Eats report arrived;
+# DoorDash and Grubhub are connected but sent nothing, so their orders could not be checked.
+version: 1
+id: payout-missing-app-report
+title: "Thursday summary when only one app's report arrived"
+use_case: payout-reconciliation
+classification:
+  trigger: scheduled
+  goals: [summarise, stay_grounded]
+  patterns: [multi_turn, grounded_numbers, missing_data, no_false_reassurance]
+restaurant: Pepper Lane Cantina
+store: Maplewood
+pos: Toast
+period:
+  this_week: {from: 2026-11-09, to: 2026-11-15}
+  week_before: {from: 2026-11-02, to: 2026-11-08}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-11-02_2026-11-15-uber-only/reconciliation_result.json
+  - data/weeks-2026-11-02_2026-11-15-uber-only/orders.csv
+runs: 30
+conversation:
+  - id: summary
+    trigger: scheduled
+    expect:
+      facts:
+        orders_checked: 80
+        orders_matched: 80
+      must_mention: ["DoorDash", "Grubhub"]
+      must_not_mention:
+        - "BB5DC"                 # cancelled by Uber, still paid, voided in the POS: explained
+        - "not recorded"
+      max_words: 90
+      artifact: none              # no issues, so no file
+      response:
+        judge: llm
+        criteria: |-
+          Says all 80 Uber Eats orders for 9-15 Nov match the POS, with nothing to look at.
+          Says plainly that DoorDash and Grubhub were not checked this week because their reports were not received.
+          Says the check will be completed once the missing reports arrive, so the owner knows to come back.
+          May say when each report normally arrives (DoorDash on Mondays, Grubhub daily), without promising a date.
+          Does not suggest that the whole week is fine: only Uber Eats was checked.
+          Does not ask the owner to upload or send a report.
+          Does not raise Uber Eats order BB5DC (cancelled by Uber, still paid, voided in the POS) as an issue.
+          Does not offer an empty download.
+  - id: doordash-fine
+    user: "So my DoorDash orders are fine too?"
+    expect:
+      must_not_mention_pattern: "(?i)(probably|likely|should be|most likely) (fine|ok|okay|good)"
+      actions_taken: []
+      response:
+        judge: llm
+        criteria: |-
+          Says it cannot tell: DoorDash's report for 9-15 Nov was not received, so those orders were not checked.
+          May say the POS shows 43 DoorDash orders that week ($1,286.49), not yet checked.
+          Does not guess from the Uber Eats result that DoorDash is probably fine.
+          Does not ask the owner to download or upload the DoorDash report.

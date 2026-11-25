@@ -1,0 +1,45 @@
+{
+  "restaurant": "Green Leaf Juice Co",
+  "store": "Harbor",
+  "pos": "Clover",
+  "time_zone": "America/Los_Angeles",
+  "apps_connected": [
+    "DoorDash",
+    "Uber Eats"
+  ],
+  "weeks": [
+    {
+      "week_start": "2026-11-09",
+      "week_end": "2026-11-15",
+      "order_level_check": "not_possible",
+      "reason": "Delivery orders do not reach this POS: the delivery tablets are not linked to Clover.",
+      "evidence": {
+        "pos_orders_with_an_app_order_id": 0,
+        "pos_orders_mentioning_an_app": 0,
+        "pos_payment_types": {
+          "Cash": 130,
+          "Debit Card": 336,
+          "Credit Card": 231
+        },
+        "doordash_orders_with_a_pos_order_id": 0,
+        "doordash_orders": 47
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 47,
+          "app_sales": 939.85
+        },
+        "Uber Eats": {
+          "app_orders": 33,
+          "app_sales": 872.78
+        }
+      },
+      "pos_in_store": {
+        "orders": 696,
+        "sales": 10169.3
+      },
+      "issues": [],
+      "note": "No order can be matched, so no order is flagged as missing."
+    }
+  ]
+}

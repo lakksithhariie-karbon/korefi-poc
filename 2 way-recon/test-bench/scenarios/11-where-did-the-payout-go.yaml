@@ -1,0 +1,51 @@
+# The owner compares Uber Eats sales with what Uber paid. The gap is mostly promotions.
+version: 1
+id: payout-sales-vs-payout
+title: "Owner asks why Uber Eats paid far less than the sales"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [explain, stay_grounded]
+  patterns: [multi_turn, grounded_numbers, unknown_rule]
+restaurant: Pepper Lane Cantina
+store: Maplewood
+pos: Toast
+period:
+  this_week: {from: 2026-11-09, to: 2026-11-15}
+  week_before: {from: 2026-11-02, to: 2026-11-08}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-11-02_2026-11-15-uber-only/reconciliation_result.json
+  - data/weeks-2026-11-02_2026-11-15-uber-only/orders.csv
+runs: 30
+conversation:
+  - id: where-did-it-go
+    user: "Uber Eats sales were about $3,355 last week but they only paid me $1,868. Where did the rest go?"
+    expect:
+      facts:
+        promotions: "1,288.67"
+        marketplace_fee: "520.82"
+        payout: "1,868.26"
+      must_not_mention_pattern: "(?i)overcharged (you )?by \\$?\\d|Uber owes you \\$?\\d"
+      actions_taken: []
+      response:
+        judge: llm
+        criteria: |-
+          Explains the gap from Uber's own report, biggest item first: promotions on items took $1,288.67, of which Uber put back $297.64.
+          Names the other deductions: marketplace fee $520.82, offer redemption fee $73.26, and $178.55 of sales tax Uber pays on the restaurant's behalf.
+          The steps add up to the $1,868.26 paid for the 80 orders (starting from $3,631.92 of sales including tax).
+          May add that $182.07 of Uber ad spend was charged separately that week.
+          Uses only figures from Uber's report as the data gives them; does not work out a new amount of its own.
+          Does not say any money is missing or that Uber made a mistake.
+          Does not judge whether the promotions were worth it: that needs profit data it does not have.
+  - id: fee-rate
+    user: "Is 24% the right fee for me?"
+    expect:
+      must_not_mention_pattern: "(?i)overcharged (you )?by \\$?\\d|Uber owes you \\$?\\d"
+      response:
+        judge: llm
+        criteria: |-
+          Says it cannot confirm the right rate without the restaurant's Uber Eats fee plan.
+          May describe what the data shows: 24% on 47 orders, 21% on 20 and 10% on 13 that week; rates often differ by order type, such as delivery and pickup.
+          Suggests checking the rates against the Uber Eats plan or contract.
+          Does not state that any order was charged the wrong fee.

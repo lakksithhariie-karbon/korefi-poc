@@ -1,0 +1,324 @@
+{
+  "restaurant": "Bright Bowl",
+  "stores": [
+    "Mission"
+  ],
+  "pos": "Square",
+  "time_zone": "America/Los_Angeles",
+  "apps_connected": [
+    "DoorDash",
+    "Uber Eats"
+  ],
+  "sources": [
+    "DoorDash detailed transactions",
+    "DoorDash cancelled-orders report",
+    "Uber Eats payment details",
+    "Square orders"
+  ],
+  "notes": [
+    "Catering orders are placed on the apps but are never sent to this POS, by design."
+  ],
+  "weeks": [
+    {
+      "week_start": "2026-10-05",
+      "week_end": "2026-10-11",
+      "apps_checked": [
+        "DoorDash",
+        "Uber Eats"
+      ],
+      "all_apps": {
+        "app_orders": 202,
+        "matched": 202,
+        "cancelled_but_paid": 3,
+        "catering_not_sent_to_pos": 1,
+        "app_sales": 6035.79,
+        "pos_sales_before_discount": 5941.66,
+        "issues": {
+          "In the POS as a sale, but the app cancelled it and did not pay": 1
+        }
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 140,
+          "matched": 140,
+          "cancelled_but_paid": 3,
+          "catering_not_sent_to_pos": 0,
+          "app_sales": 4036.92,
+          "pos_sales_before_discount": 3942.79,
+          "issues": {
+            "In the POS as a sale, but the app cancelled it and did not pay": 1
+          }
+        },
+        "Uber Eats": {
+          "app_orders": 62,
+          "matched": 62,
+          "cancelled_but_paid": 0,
+          "catering_not_sent_to_pos": 1,
+          "app_sales": 1998.87,
+          "pos_sales_before_discount": 1998.87,
+          "issues": {}
+        }
+      },
+      "issues": [
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-06",
+          "order_time": "",
+          "order_id": "DE02E3DC",
+          "app_amount": 17.94,
+          "pos_amount": 17.94,
+          "note": "DoorDash auto-accepted it through the POS at 1:28 pm on 6 Oct while the store was still open on DoorDash. No courier was assigned. Square marked it completed at 2:04 pm. DoorDash cancelled it at 2:40 pm as \"Store closed\" and paid nothing; the customer reordered at 3:30 pm. The store seems to stop taking orders from about 2 to 5 pm.",
+          "issue": "In the POS as a sale, but the app cancelled it and did not pay"
+        }
+      ],
+      "cancelled_but_paid": [
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-05",
+          "order_id": "E891ACC0",
+          "app_amount": 33.0,
+          "note": "Customer cancelled after the store made it; DoorDash still paid. Square keeps the payment in its sales"
+        },
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-08",
+          "order_id": "C64E07B2",
+          "app_amount": 34.96,
+          "note": "Customer cancelled after the store made it; DoorDash still paid. Square keeps the payment in its sales"
+        },
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-09",
+          "order_id": "5D2A4289",
+          "app_amount": 26.17,
+          "note": "Customer cancelled after the store made it; DoorDash still paid. Square keeps the payment in its sales"
+        }
+      ],
+      "catering_not_sent_to_pos": [
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-07",
+          "order_id": "07667",
+          "app_amount": 467.0
+        }
+      ],
+      "matched_with_a_note": [],
+      "cancelled_on_both_sides": 2
+    },
+    {
+      "week_start": "2026-10-12",
+      "week_end": "2026-10-18",
+      "apps_checked": [
+        "DoorDash",
+        "Uber Eats"
+      ],
+      "all_apps": {
+        "app_orders": 201,
+        "matched": 201,
+        "cancelled_but_paid": 0,
+        "catering_not_sent_to_pos": 2,
+        "app_sales": 5895.0,
+        "pos_sales_before_discount": 5895.0,
+        "issues": {}
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 155,
+          "matched": 155,
+          "cancelled_but_paid": 0,
+          "catering_not_sent_to_pos": 1,
+          "app_sales": 4568.44,
+          "pos_sales_before_discount": 4568.44,
+          "issues": {}
+        },
+        "Uber Eats": {
+          "app_orders": 46,
+          "matched": 46,
+          "cancelled_but_paid": 0,
+          "catering_not_sent_to_pos": 1,
+          "app_sales": 1326.56,
+          "pos_sales_before_discount": 1326.56,
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "cancelled_but_paid": [],
+      "catering_not_sent_to_pos": [
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-14",
+          "order_id": "3FFC6",
+          "app_amount": 430.0
+        },
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-15",
+          "order_id": "DC4AEEAD",
+          "app_amount": 112.0
+        }
+      ],
+      "matched_with_a_note": [],
+      "cancelled_on_both_sides": 1
+    },
+    {
+      "week_start": "2026-10-19",
+      "week_end": "2026-10-25",
+      "apps_checked": [
+        "DoorDash",
+        "Uber Eats"
+      ],
+      "all_apps": {
+        "app_orders": 189,
+        "matched": 189,
+        "cancelled_but_paid": 1,
+        "catering_not_sent_to_pos": 7,
+        "app_sales": 5387.92,
+        "pos_sales_before_discount": 5371.67,
+        "issues": {}
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 139,
+          "matched": 139,
+          "cancelled_but_paid": 1,
+          "catering_not_sent_to_pos": 0,
+          "app_sales": 3822.0,
+          "pos_sales_before_discount": 3805.75,
+          "issues": {}
+        },
+        "Uber Eats": {
+          "app_orders": 50,
+          "matched": 50,
+          "cancelled_but_paid": 0,
+          "catering_not_sent_to_pos": 7,
+          "app_sales": 1565.92,
+          "pos_sales_before_discount": 1565.92,
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "cancelled_but_paid": [
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-20",
+          "order_id": "40CC839D",
+          "app_amount": 16.25,
+          "note": "Customer cancelled after the store made it; DoorDash still paid. Square keeps the payment in its sales"
+        }
+      ],
+      "catering_not_sent_to_pos": [
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-20",
+          "order_id": "19624",
+          "app_amount": 299.6
+        },
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-20",
+          "order_id": "C0003",
+          "app_amount": 283.1
+        },
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-21",
+          "order_id": "E8140",
+          "app_amount": 299.7
+        },
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-23",
+          "order_id": "E5DD3",
+          "app_amount": 420.3
+        },
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-24",
+          "order_id": "0FD8C",
+          "app_amount": 287.0
+        },
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-24",
+          "order_id": "BE6F5",
+          "app_amount": 300.45
+        },
+        {
+          "app": "Uber Eats",
+          "store": "Mission",
+          "order_date": "2026-10-25",
+          "order_id": "24266",
+          "app_amount": 296.6
+        }
+      ],
+      "matched_with_a_note": [],
+      "cancelled_on_both_sides": 1
+    },
+    {
+      "week_start": "2026-10-26",
+      "week_end": "2026-11-01",
+      "apps_checked": [
+        "DoorDash",
+        "Uber Eats"
+      ],
+      "all_apps": {
+        "app_orders": 183,
+        "matched": 183,
+        "cancelled_but_paid": 0,
+        "catering_not_sent_to_pos": 0,
+        "app_sales": 7411.92,
+        "pos_sales_before_discount": 7411.92,
+        "issues": {}
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 151,
+          "matched": 151,
+          "cancelled_but_paid": 0,
+          "catering_not_sent_to_pos": 0,
+          "app_sales": 6296.16,
+          "pos_sales_before_discount": 6296.16,
+          "issues": {}
+        },
+        "Uber Eats": {
+          "app_orders": 32,
+          "matched": 32,
+          "cancelled_but_paid": 0,
+          "catering_not_sent_to_pos": 0,
+          "app_sales": 1115.76,
+          "pos_sales_before_discount": 1115.76,
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "cancelled_but_paid": [],
+      "catering_not_sent_to_pos": [],
+      "matched_with_a_note": [
+        {
+          "app": "DoorDash",
+          "store": "Mission",
+          "order_date": "2026-10-27",
+          "order_id": "1D117DE3",
+          "app_amount": 266.54,
+          "pos_amount": 260.85,
+          "note": "Buy 1, get 1 free on four $5.69 sides: DoorDash discounted 2 free items ($11.38), Square recorded only 1 ($5.69). After discounts DoorDash shows $255.16 and Square $260.85, so Square is $5.69 higher than DoorDash. The payout is right; only Square's sales are $5.69 too high."
+        }
+      ],
+      "cancelled_on_both_sides": 0
+    }
+  ]
+}

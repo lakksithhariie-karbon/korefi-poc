@@ -1,0 +1,38 @@
+# Two filters together: app and issue type, across four weeks. The one order that needs a look is real (DE02E3DC).
+version: 1
+id: payout-two-filters-four-weeks
+title: "Excel of DoorDash orders that need a look, four weeks"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [customise_view]
+  patterns: [single_turn, combined_filters, artifact]
+restaurant: Bright Bowl
+store: Mission
+pos: Square
+period:
+  this_week: {from: 2026-10-26, to: 2026-11-01}
+  four_weeks: {from: 2026-10-05, to: 2026-11-01}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-10-05_2026-11-01-geary/reconciliation_result.json
+  - data/weeks-2026-10-05_2026-11-01-geary/orders.csv
+runs: 30
+conversation:
+  - id: doordash-four-weeks
+    user: "Give me the Excel of DoorDash orders that need a look for the last four weeks."
+    expect:
+      artifact:
+        type: excel
+        rows: 1
+        order_ids: ["DE02E3DC"]
+        total_amount: "17.94"
+        apps: [DoorDash]
+      response:
+        judge: llm
+        criteria: |-
+          Produces an Excel file with exactly one DoorDash order: DE02E3DC (6 Oct), $17.94, which Square kept as a sale but DoorDash cancelled and did not pay.
+          Does not include catering orders, cancelled orders DoorDash still paid, or the buy-1-get-1 order 1D117DE3: none of them needs a look.
+          Includes no Uber Eats orders and no matched orders.
+          The chat reply is short and says what the file contains.
+          May say which weeks it covers.

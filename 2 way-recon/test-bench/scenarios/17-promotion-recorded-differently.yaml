@@ -1,0 +1,33 @@
+# A buy-1-get-1 order Square recorded with one free item instead of two. Matched; Square's sales are $5.69 high.
+version: 1
+id: payout-promotion-recorded-differently
+title: "Owner asks why Square is higher than DoorDash on one order"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [explain]
+  patterns: [single_turn, grounded_numbers, matched_with_note]
+restaurant: Bright Bowl
+store: Mission
+pos: Square
+period:
+  this_week: {from: 2026-10-26, to: 2026-11-01}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-10-05_2026-11-01-geary/reconciliation_result.json
+  - data/weeks-2026-10-05_2026-11-01-geary/orders.csv
+runs: 30
+conversation:
+  - id: why-higher
+    user: "Square shows $5.69 more than DoorDash on order 1D117DE3. Why?"
+    expect:
+      facts:
+        difference: "5.69"
+      must_not_mention_pattern: "(?i)DoorDash owes you|underpaid you|DoorDash (made a mistake|got it wrong)"
+      response:
+        judge: llm
+        criteria: |-
+          Explains: it was a buy-1-get-1 order on four sides; DoorDash discounted two free items ($11.38), Square recorded only one ($5.69).
+          Says the payout is right and only Square's sales are $5.69 too high, so it is not an issue with DoorDash.
+          May suggest checking how the promotion is set up in Square.
+          Does not say money is missing or owed.

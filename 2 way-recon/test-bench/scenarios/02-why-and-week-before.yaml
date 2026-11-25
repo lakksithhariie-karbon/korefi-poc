@@ -1,0 +1,56 @@
+# The owner sees Toast lower than DoorDash, pushes back, then asks about the week before.
+version: 1
+id: payout-toast-lower-than-app
+title: "Why Toast shows less DoorDash than DoorDash reports"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [explain, keep_context]
+  patterns: [multi_turn, grounded_numbers, owner_disputes]
+restaurant: Mango Street Kitchen
+store: Oakridge
+pos: Toast
+period:
+  this_week: {from: 2026-10-05, to: 2026-10-11}
+  week_before: {from: 2026-09-28, to: 2026-10-04}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-09-28_2026-10-11/reconciliation_result.json
+  - data/weeks-2026-09-28_2026-10-11/orders.csv
+runs: 30
+conversation:
+  - id: why-lower
+    user: "Toast shows less DoorDash sales this week than DoorDash's report. Why?"
+    expect:
+      facts:
+        gap: "12.00"
+        order_id: "32A03F68"
+      must_not_mention_pattern: "(?i)picked up"
+      response:
+        judge: llm
+        criteria: |-
+          Explains the $12.00 gap: one DoorDash order, 32A03F68 on 6 Oct, was cancelled by the customer after the store made it; DoorDash still paid ($11.28); Toast voided it to $0, so Toast's sales leave it out.
+          Says it is not a problem and nothing needs fixing.
+          May suggest confirming it in DoorDash's portal, where it shows as cancelled and paid.
+          Does not say money is missing or that the store voided it by mistake.
+  - id: owner-disputes
+    user: "But our POS says that order was cancelled. Isn't that a problem?"
+    expect:
+      must_not_mention_pattern: "(?i)picked up|void(ed)? (it )?by mistake"
+      response:
+        judge: llm
+        criteria: |-
+          Says no: the customer cancelled after the store made it, DoorDash paid for it, and voiding it in the POS was correct.
+          Keeps to its answer and does not start calling it an issue.
+          May point to DoorDash's portal to confirm it shows as cancelled and paid.
+  - id: week-before
+    user: "Did this happen the week before too?"
+    expect:
+      facts:
+        order_id: "8178D310"
+        app_paid: "8.28"
+      response:
+        judge: llm
+        criteria: |-
+          Understands "this" as a cancelled order DoorDash still paid, without asking the owner to repeat it.
+          Answers yes: DoorDash order 8178D310 on 3 Oct, $12.00, cancelled after the store made it; DoorDash paid $8.28; voided in the POS.

@@ -1,0 +1,57 @@
+# REAL ISSUE. DoorDash cancelled DE02E3DC as "Store closed" and paid nothing, but Square shows it completed.
+version: 1
+id: payout-cancelled-unpaid-store-closed
+title: "Thursday summary with an order the app cancelled unpaid, then why"
+use_case: payout-reconciliation
+classification:
+  trigger: scheduled
+  goals: [summarise, explain]
+  patterns: [multi_turn, real_issue, by_design_not_issues]
+restaurant: Bright Bowl
+store: Mission
+pos: Square
+period:
+  this_week: {from: 2026-10-05, to: 2026-10-11}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-10-05_2026-11-01-geary/reconciliation_result.json
+  - data/weeks-2026-10-05_2026-11-01-geary/orders.csv
+runs: 30
+conversation:
+  - id: summary
+    trigger: scheduled
+    expect:
+      facts:
+        orders_checked: 202
+        issue_order_id: "DE02E3DC"
+        issue_amount: "17.94"
+      must_not_mention_pattern: "(?i)DoorDash owes you|underpaid you|catering orders? (are |were )?missing"
+      max_words: 150
+      artifact:
+        type: excel
+        rows: 1
+        order_ids: ["DE02E3DC"]
+      handoff:
+        to: korefi_team
+        request: pos_order_missing_from_app
+        alert: true
+      response:
+        judge: llm
+        criteria: |-
+          Says the week's 202 delivery orders match Square, and one order needs a look.
+          Names it: DoorDash DE02E3DC on 6 Oct, $17.94. Square shows it as a completed sale, but DoorDash cancelled it and paid nothing.
+          Explains the impact: the payout is right; Square's sales are $17.94 too high, and food may have been made.
+          Says the KoreFi team will look into it, or asks whether the food was made.
+          May mention, as a quiet line, the catering order that isn't sent to Square or the cancelled orders DoorDash still paid.
+          Does not call the catering order missing or an issue.
+  - id: why-unpaid
+    user: "Why didn't DoorDash pay for that order?"
+    expect:
+      must_not_mention_pattern: "(?i)DoorDash (made a mistake|got it wrong)|DoorDash owes you"
+      response:
+        judge: llm
+        criteria: |-
+          Explains: DoorDash accepted it automatically through the POS while the store was still open on DoorDash, no courier was assigned, and DoorDash cancelled it as "Store closed", so it paid nothing.
+          Says the store seems to stop taking orders in the afternoon (about 2 to 5 pm), which is likely why.
+          Suggests matching the store's DoorDash hours to its real break, or pausing DoorDash before closing.
+          Does not say DoorDash made a mistake.

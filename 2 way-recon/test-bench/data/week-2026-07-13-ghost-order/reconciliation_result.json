@@ -1,0 +1,78 @@
+{
+  "restaurant": "Juniper Tea Co",
+  "stores": [
+    "Downtown",
+    "Westside",
+    "Northside",
+    "Beachside"
+  ],
+  "pos": "Toast",
+  "time_zone": "America/Los_Angeles",
+  "apps_connected": [
+    "DoorDash"
+  ],
+  "sources": [
+    "DoorDash detailed transactions",
+    "DoorDash cancelled-orders report (Paid flag, cancellation reason, minutes to cancel)",
+    "Toast orders"
+  ],
+  "weeks": [
+    {
+      "week_start": "2026-07-13",
+      "week_end": "2026-07-19",
+      "apps_checked": [
+        "DoorDash"
+      ],
+      "all_apps": {
+        "app_orders": 242,
+        "matched": 242,
+        "cancelled_but_paid": 1,
+        "catering_not_sent_to_pos": 0,
+        "app_sales": 5368.6,
+        "pos_sales_before_discount": 5359.1,
+        "issues": {
+          "In the POS as a sale, but the app cancelled it within seconds and did not pay": 1
+        }
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 242,
+          "matched": 242,
+          "cancelled_but_paid": 1,
+          "catering_not_sent_to_pos": 0,
+          "app_sales": 5368.6,
+          "pos_sales_before_discount": 5359.1,
+          "issues": {
+            "In the POS as a sale, but the app cancelled it within seconds and did not pay": 1
+          }
+        }
+      },
+      "issues": [
+        {
+          "app": "DoorDash",
+          "store": "Downtown",
+          "order_date": "2026-07-14",
+          "order_time": "17:16",
+          "order_id": "CC78C7BF",
+          "app_amount": 9.45,
+          "pos_amount": 9.45,
+          "note": "DoorDash cancelled it 1 seconds after it was placed (Other), reason \"Mx Did Not Confirm\", and paid nothing. The POS confirmed it after the cancel and kept it as a $9.45 sale. Toast kitchen ticket shows it was made and fulfilled at 5:19 pm.",
+          "issue": "In the POS as a sale, but the app cancelled it within seconds and did not pay"
+        }
+      ],
+      "cancelled_but_paid": [
+        {
+          "app": "DoorDash",
+          "store": "Westside",
+          "order_date": "2026-07-14",
+          "order_id": "BA6F7403",
+          "app_amount": 9.5,
+          "note": "Customer cancelled after the store made it; DoorDash still paid $7.12. Toast voids these to $0, so Toast's sales leave it out"
+        }
+      ],
+      "catering_not_sent_to_pos": [],
+      "matched_with_a_note": [],
+      "cancelled_on_both_sides": 1
+    }
+  ]
+}

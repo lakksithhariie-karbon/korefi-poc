@@ -1,0 +1,44 @@
+# The scheduled Thursday run for the week of 5-11 Oct. No user message. A clean week: every order matches.
+version: 1
+id: payout-weekly-summary-clean
+title: "Thursday summary for a clean week"
+use_case: payout-reconciliation
+classification:
+  trigger: scheduled
+  goals: [summarise]
+  patterns: [single_turn, clean_week, no_false_alarms]
+restaurant: Mango Street Kitchen
+store: Oakridge
+pos: Toast
+period:
+  this_week: {from: 2026-10-05, to: 2026-10-11}
+  week_before: {from: 2026-09-28, to: 2026-10-04}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-09-28_2026-10-11/reconciliation_result.json
+  - data/weeks-2026-09-28_2026-10-11/orders.csv
+runs: 30
+conversation:
+  - id: summary
+    trigger: scheduled
+    expect:
+      facts:
+        orders_checked: 167
+        orders_matched: 167
+      must_not_mention:
+        - "393934949374079"
+        - "439034946193879"
+        - "error charge"
+      must_not_mention_pattern: "(?i)picked up|voided by mistake"
+      max_words: 70
+      artifact: none
+      response:
+        judge: llm
+        criteria: |-
+          Says all 167 delivery orders for 5-11 Oct match the POS, and nothing needs a look.
+          Keeps it short: one or two lines.
+          May mention, as a quiet line, that one cancelled order was still paid by DoorDash.
+          Does not raise DoorDash order 32A03F68 as an issue or ask the owner to check it: the customer cancelled after the store made it, DoorDash paid, and the POS void was correct.
+          Does not raise the Grubhub order matched by day and amount, discounts, refunds or chargebacks.
+          Does not mention an Excel file or a download: there is nothing to look at.
+          Uses no technical terms such as tab name, order reference or matching logic.

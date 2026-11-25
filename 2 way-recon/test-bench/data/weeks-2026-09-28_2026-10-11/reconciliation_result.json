@@ -1,0 +1,200 @@
+{
+  "restaurant": "Mango Street Kitchen",
+  "store": "Oakridge",
+  "pos": "Toast",
+  "time_zone": "America/Chicago",
+  "brands": {
+    "DoorDash": [
+      "Mango Street Food",
+      "Mango Street Kitchen (Oakridge)"
+    ],
+    "Uber Eats": [
+      "Mango Street Food (Oakridge)"
+    ],
+    "Grubhub": [
+      "Mango Street Food"
+    ]
+  },
+  "pos_channels_not_reconciled": [
+    "Dine In",
+    "Online Ordering - Takeout",
+    "Take Out",
+    "Toast Delivery Services"
+  ],
+  "weeks": [
+    {
+      "week_start": "2026-09-28",
+      "week_end": "2026-10-04",
+      "all_apps": {
+        "app_orders": 181,
+        "matched": 181,
+        "matched_after_discount": 42,
+        "matched_by_day_and_amount": 0,
+        "cancelled_but_paid": 1,
+        "app_sales": 5299.7,
+        "pos_sales_before_discount": 5287.7,
+        "issues": {}
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 70,
+          "matched": 70,
+          "matched_after_discount": 19,
+          "matched_by_day_and_amount": 0,
+          "cancelled_but_paid": 1,
+          "app_sales": 1683.64,
+          "pos_sales_before_discount": 1671.64,
+          "issues": {}
+        },
+        "Uber Eats": {
+          "app_orders": 103,
+          "matched": 103,
+          "matched_after_discount": 23,
+          "matched_by_day_and_amount": 0,
+          "cancelled_but_paid": 0,
+          "app_sales": 3233.25,
+          "pos_sales_before_discount": 3233.25,
+          "issues": {}
+        },
+        "Grubhub": {
+          "app_orders": 8,
+          "matched": 8,
+          "matched_after_discount": 0,
+          "matched_by_day_and_amount": 0,
+          "cancelled_but_paid": 0,
+          "app_sales": 382.81,
+          "pos_sales_before_discount": 382.81,
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "cancelled_but_paid": [
+        {
+          "app": "Uber Eats",
+          "order_date": "2026-10-02",
+          "order_time": "23:27",
+          "order_id": "D9ECF",
+          "app_amount": 25.19,
+          "note": "Marked unfulfilled by Uber Eats but still paid $20.40; voided in the POS"
+        },
+        {
+          "app": "DoorDash",
+          "order_date": "2026-10-03",
+          "order_time": "16:43",
+          "order_id": "8178D310",
+          "app_amount": 12.0,
+          "note": "Customer cancelled after the store made it; DoorDash still paid $8.28. Toast voids these to $0, so Toast's sales leave it out"
+        }
+      ],
+      "explained_not_flagged": [
+        {
+          "app": "Uber Eats",
+          "order_date": "2026-10-02",
+          "order_id": "D9ECF",
+          "note": "Marked unfulfilled by Uber Eats but still paid $20.40; voided in the POS",
+          "reason": "explained"
+        },
+        {
+          "app": "DoorDash",
+          "order_date": "2026-10-03",
+          "order_id": "8178D310",
+          "note": "Customer cancelled after the store made it; DoorDash still paid $8.28. Toast voids these to $0, so Toast's sales leave it out",
+          "reason": "cancelled_paid"
+        }
+      ],
+      "not_counted": {
+        "doordash_error_charges_and_adjustments": 2,
+        "ubereats_refund_rows": 3
+      },
+      "doordash_payouts": [
+        {
+          "payout_id": "617571557",
+          "total": 1159.15
+        }
+      ]
+    },
+    {
+      "week_start": "2026-10-05",
+      "week_end": "2026-10-11",
+      "all_apps": {
+        "app_orders": 167,
+        "matched": 167,
+        "matched_after_discount": 40,
+        "matched_by_day_and_amount": 1,
+        "cancelled_but_paid": 1,
+        "app_sales": 4928.89,
+        "pos_sales_before_discount": 4916.89,
+        "issues": {}
+      },
+      "by_app": {
+        "DoorDash": {
+          "app_orders": 80,
+          "matched": 80,
+          "matched_after_discount": 18,
+          "matched_by_day_and_amount": 0,
+          "cancelled_but_paid": 1,
+          "app_sales": 1868.83,
+          "pos_sales_before_discount": 1856.83,
+          "issues": {}
+        },
+        "Uber Eats": {
+          "app_orders": 78,
+          "matched": 78,
+          "matched_after_discount": 22,
+          "matched_by_day_and_amount": 0,
+          "cancelled_but_paid": 0,
+          "app_sales": 2837.51,
+          "pos_sales_before_discount": 2837.51,
+          "issues": {}
+        },
+        "Grubhub": {
+          "app_orders": 9,
+          "matched": 9,
+          "matched_after_discount": 0,
+          "matched_by_day_and_amount": 1,
+          "cancelled_but_paid": 0,
+          "app_sales": 222.55,
+          "pos_sales_before_discount": 222.55,
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "cancelled_but_paid": [
+        {
+          "app": "DoorDash",
+          "order_date": "2026-10-06",
+          "order_time": "13:29",
+          "order_id": "32A03F68",
+          "app_amount": 12.0,
+          "note": "Customer cancelled after the store made it; DoorDash still paid $11.28. Toast voids these to $0, so Toast's sales leave it out"
+        }
+      ],
+      "explained_not_flagged": [
+        {
+          "app": "DoorDash",
+          "order_date": "2026-10-06",
+          "order_id": "32A03F68",
+          "note": "Customer cancelled after the store made it; DoorDash still paid $11.28. Toast voids these to $0, so Toast's sales leave it out",
+          "reason": "cancelled_paid"
+        },
+        {
+          "app": "Grubhub",
+          "order_date": "2026-10-08",
+          "order_id": "393934949374079",
+          "note": "POS shows a different Grubhub number (439034946193879); same day and amount, so the same order",
+          "reason": "matched_day_amount"
+        }
+      ],
+      "not_counted": {
+        "doordash_error_charges_and_adjustments": 2,
+        "ubereats_refund_rows": 2
+      },
+      "doordash_payouts": [
+        {
+          "payout_id": "619565197",
+          "total": 1336.33
+        }
+      ]
+    }
+  ]
+}

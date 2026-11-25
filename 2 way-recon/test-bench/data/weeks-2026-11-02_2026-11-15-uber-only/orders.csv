@@ -1,0 +1,153 @@
+week,app,order_date,order_time,order_id,app_amount,pos_amount,pos_discount,result,note,fee_rate_charged
+2026-11-02,Uber Eats,2026-11-02,11:56,4BB29,24.86,24.86,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-02,14:26,6950D,63.84,43.99,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-02,16:37,64B65,15.15,15.15,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-02,17:53,40AB7,51.21,38.91,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-02,18:36,A0FFC,35.16,35.16,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-03,11:20,906C7,37.66,37.66,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-03,12:43,D2392,17.3,17.3,0.0,matched,,10.0
+2026-11-02,Uber Eats,2026-11-03,14:35,0F8C1,39.5,27.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,15:32,42BD7,42.5,30.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,16:43,7C44C,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,17:02,EB3B3,39.12,26.82,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,17:18,18621,35.46,27.91,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,18:50,B5E77,39.7,27.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,19:27,45DCD,60.1,47.8,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-03,19:28,2FFB5,62.64,42.79,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-03,19:37,BEC36,45.7,33.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,11:25,CF2C0,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,12:25,F1D96,16.15,16.15,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-04,12:42,B17D9,20.14,12.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,13:12,979DF,31.14,23.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,13:51,448A5,41.08,28.78,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,16:13,6D148,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,17:21,02169,47.96,35.66,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,17:31,D1076,23.88,23.88,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-04,17:44,6D29A,46.7,34.4,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-04,18:00,E4904,13.15,13.15,0.0,matched,,21.0
+2026-11-02,Uber Eats,2026-11-04,18:07,22120,52.94,33.09,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,18:26,0EE5D,21.38,13.83,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,18:33,DD2B5,71.72,59.42,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,19:10,5FFBB,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-04,20:37,368D7,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-05,11:25,B634D,46.44,34.14,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-05,11:55,F454A,57.65,45.35,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-05,13:30,C5EF9,22.98,22.98,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-05,14:32,FB9FE,62.64,42.79,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-05,14:33,EFC83,77.64,65.34,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-05,16:31,6A335,40.3,28.0,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-05,19:59,810E8,29.74,29.74,0.0,matched,,21.0
+2026-11-02,Uber Eats,2026-11-06,12:28,8959E,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-02,Uber Eats,2026-11-06,16:12,78FC6,44.68,32.38,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-06,16:29,265D8,36.59,36.59,0.0,matched,,21.0
+2026-11-02,Uber Eats,2026-11-06,16:40,D70AE,40.5,28.2,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-06,17:18,B8354,43.08,30.78,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-06,17:23,DAA93,49.24,41.69,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-06,17:49,3363F,31.27,31.27,0.0,matched,,21.0
+2026-11-02,Uber Eats,2026-11-06,18:02,5DB12,18.42,18.42,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-06,18:04,7A02E,28.63,21.08,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-06,18:40,EEC95,28.13,20.58,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-06,19:08,B6329,27.38,19.83,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-06,19:14,481BF,52.94,33.09,19.85,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-02,Uber Eats,2026-11-06,20:27,D985C,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-06,20:34,8DE57,39.7,27.4,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-02,Uber Eats,2026-11-07,16:39,3E05E,23.34,23.34,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-07,16:46,9D44A,40.11,32.56,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-07,18:34,56931,20.14,12.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-07,19:37,449FD,29.06,21.51,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-07,20:15,4BAB0,28.06,20.51,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-08,12:46,D82A4,57.18,44.88,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-08,14:18,93730,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-08,15:09,22FED,39.12,26.82,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-08,15:47,001A4,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-08,15:49,1D59A,17.91,17.91,0.0,matched,,24.0
+2026-11-02,Uber Eats,2026-11-08,16:12,63D6E,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-08,16:41,6B178,20.14,12.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-08,18:01,9BADE,43.25,30.95,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-08,18:02,DA20D,47.08,34.78,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-08,18:45,7FBE7,20.14,12.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-02,Uber Eats,2026-11-08,19:47,1C109,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-02,Uber Eats,2026-11-08,19:52,6EF50,41.08,28.78,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-08,20:24,30A87,57.01,49.46,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-02,Uber Eats,2026-11-08,20:33,223D5,6.14,0.0,,explained,Marked cancelled by Uber Eats but still paid $4.67; voided in the POS,
+2026-11-09,Uber Eats,2026-11-09,11:12,9C304,47.65,35.35,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-09,12:00,CC681,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-09,12:39,7C0F0,18.06,18.06,0.0,matched,,10.0
+2026-11-09,Uber Eats,2026-11-09,13:37,CBF7E,57.75,45.45,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-09,15:09,E339F,25.14,17.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-09,15:29,F8F58,41.7,29.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-09,16:48,A70FC,45.41,33.11,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-09,17:54,38CF5,40.8,28.5,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-09,18:23,A7F8D,17.91,17.91,0.0,matched,,24.0
+2026-11-09,Uber Eats,2026-11-09,18:29,5AA26,49.41,37.11,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-09,19:03,E4523,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-09,19:59,0AE76,81.29,61.44,19.85,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-10,11:32,6E1A8,39.5,27.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-10,11:50,9836C,64.04,44.19,19.85,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-10,12:05,BF0EA,43.82,31.52,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-10,13:20,BB5DC,39.5,0.0,,explained,Marked cancelled by Uber Eats but still paid $31.20; voided in the POS,
+2026-11-09,Uber Eats,2026-11-10,13:42,B968E,45.93,38.38,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-10,14:05,37F69,41.5,29.2,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-10,15:50,138D1,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-10,17:29,81641,42.2,29.9,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-10,17:31,30D37,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-10,17:49,07B0F,63.84,43.99,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-10,17:59,AE5CF,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-10,17:59,71B2B,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,11:40,DA828,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,11:42,553FB,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,12:19,D82EE,67.47,55.17,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,15:17,20AE5,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,17:06,2BB3F,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,17:34,2B888,32.8,20.5,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,17:50,9E079,63.84,43.99,19.85,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-11,18:00,CEE36,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,18:19,9B12E,41.5,29.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-11,18:56,16FF5,39.7,27.4,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-12,12:43,676B7,25.26,17.71,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-12,12:54,AACB2,12.07,12.07,0.0,matched,,21.0
+2026-11-09,Uber Eats,2026-11-12,14:09,7466D,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-12,16:01,8B465,41.98,41.98,0.0,matched,,24.0
+2026-11-09,Uber Eats,2026-11-12,16:01,67EBC,49.62,37.32,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-12,16:05,9277F,41.7,29.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-12,17:03,DC34E,80.2,60.35,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-12,19:46,E0DC7,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-12,19:54,32835,41.7,29.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,11:29,CA46B,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-13,12:19,C9C81,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,12:26,810F5,39.7,27.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,13:18,C5D2D,44.85,32.55,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,16:26,C16CF,30.28,22.73,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-13,17:37,A2817,61.28,48.98,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,17:39,68210,17.91,17.91,0.0,matched,,24.0
+2026-11-09,Uber Eats,2026-11-13,17:43,70D4A,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-13,18:16,A1753,24.76,17.21,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,18:26,ED380,42.18,29.88,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,18:38,08137,39.12,26.82,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,18:54,58F97,41.7,29.4,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-13,19:38,27F26,49.19,36.89,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,19:51,94675,72.91,60.61,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-13,19:57,42EE3,66.12,53.82,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-13,19:59,0AF07,40.55,33.0,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-13,20:26,F8DE0,39.7,27.4,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-14,11:14,B4853,44.41,32.11,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-14,13:51,270D0,41.7,29.4,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-14,15:02,A5B12,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-14,16:00,C8D08,39.7,27.4,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-14,17:38,8CF46,62.64,42.79,19.85,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-14,17:50,B97ED,74.92,55.07,19.85,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-14,18:30,D2A9C,63.84,43.99,19.85,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-14,19:08,F2408,40.5,28.2,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-14,20:01,8F030,25.14,17.59,7.55,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-15,11:16,A872A,64.73,52.43,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-15,11:18,02E4D,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-15,11:45,823CD,47.93,35.63,12.3,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-15,11:45,DC69B,37.3,37.3,0.0,matched,,10.0
+2026-11-09,Uber Eats,2026-11-15,13:26,61D04,39.3,27.0,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-15,13:52,5897C,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-15,14:50,B8FC4,24.14,16.59,7.55,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-15,15:09,D1E54,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-15,16:51,1C817,38.5,26.2,12.3,matched_discount,POS amount is after the promotion discount,24.0
+2026-11-09,Uber Eats,2026-11-15,17:08,D374A,86.65,66.8,19.85,matched_discount,POS amount is after the promotion discount,21.0
+2026-11-09,Uber Eats,2026-11-15,17:11,6BA56,29.05,21.5,7.55,matched_discount,POS amount is after the promotion discount,10.0
+2026-11-09,Uber Eats,2026-11-15,20:05,0AA6A,25.38,17.83,7.55,matched_discount,POS amount is after the promotion discount,24.0

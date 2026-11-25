@@ -1,0 +1,33 @@
+# An allowed filter that returns nothing. The agent should say so, not produce an empty file.
+version: 1
+id: payout-custom-empty-result
+title: "Owner asks for an Excel of Grubhub issues when there are none"
+use_case: payout-reconciliation
+classification:
+  trigger: user
+  goals: [customise]
+  patterns: [single_turn, allowed_filter, empty_result]
+restaurant: Mango Street Kitchen
+store: Oakridge
+pos: Toast
+period:
+  this_week: {from: 2026-10-05, to: 2026-10-11}
+  week_before: {from: 2026-09-28, to: 2026-10-04}
+skill: skills/payout-reconciliation.md
+data:
+  - data/weeks-2026-09-28_2026-10-11/reconciliation_result.json
+  - data/weeks-2026-09-28_2026-10-11/orders.csv
+runs: 30
+conversation:
+  - id: grubhub-excel
+    user: "Give me the Excel with just the Grubhub orders that need a look."
+    expect:
+      artifact: none
+      response:
+        judge: llm
+        criteria: |-
+          Says no Grubhub orders need a look this week.
+          May add that all 9 Grubhub orders match the POS.
+          May mention that one Grubhub order shows a different number in the POS but matches on day and amount, so it is the same order.
+          Does not mention an Excel file or a download: there is nothing to look at.
+          Does not produce an empty Excel file, and does not invent issues to fill one.

@@ -1,0 +1,34 @@
+# A store whose POS never sees delivery orders (tablets not linked). Order-by-order checking is impossible.
+version: 1
+id: payout-pos-not-linked
+title: "Thursday summary when the POS does not record delivery orders"
+use_case: payout-reconciliation
+classification:
+  trigger: scheduled
+  goals: [summarise, stay_grounded]
+  patterns: [single_turn, missing_data, no_false_alarms]
+restaurant: Green Leaf Juice Co
+store: Harbor
+pos: Clover
+period:
+  this_week: {from: 2026-11-09, to: 2026-11-15}
+skill: skills/payout-reconciliation.md
+data:
+  - data/week-2026-11-09-pos-not-linked/reconciliation_result.json
+  - data/week-2026-11-09-pos-not-linked/orders.csv
+runs: 30
+conversation:
+  - id: summary
+    trigger: scheduled
+    expect:
+      must_not_mention_pattern: "(?i)not recorded in your POS|missing from (your|the) POS|(47|80) (delivery |app )?orders (are |were )?missing"
+      max_words: 110
+      artifact: none
+      response:
+        judge: llm
+        criteria: |-
+          Says the delivery orders could not be checked one by one against the POS this week, and why: delivery orders don't reach this POS because the delivery tablets aren't linked to it.
+          Gives the app totals the data provides, for example DoorDash 47 orders ($939.85) and Uber Eats 33 orders ($872.78).
+          Does not say the app orders are missing from the POS or list them as issues.
+          May suggest linking the delivery tablets to the POS so orders can be checked.
+          Does not offer an Excel file of issues.

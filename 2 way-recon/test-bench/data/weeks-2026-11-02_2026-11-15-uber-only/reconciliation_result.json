@@ -1,0 +1,143 @@
+{
+  "restaurant": "Pepper Lane Cantina",
+  "store": "Maplewood",
+  "pos": "Toast",
+  "time_zone": "America/Chicago",
+  "apps_connected": [
+    "DoorDash",
+    "Uber Eats",
+    "Grubhub"
+  ],
+  "pos_channels_not_reconciled": [
+    "Curbside",
+    "Dine In",
+    "Take Out",
+    "Toast Delivery Services"
+  ],
+  "weeks": [
+    {
+      "week_start": "2026-11-02",
+      "week_end": "2026-11-08",
+      "apps_checked": [
+        "Uber Eats"
+      ],
+      "apps_not_checked": {
+        "DoorDash": {
+          "reason": "No report received for this week",
+          "pos_orders": 43,
+          "pos_sales": 1030.93
+        },
+        "Grubhub": {
+          "reason": "No report received for this week",
+          "pos_orders": 1,
+          "pos_sales": 23.88
+        }
+      },
+      "by_app": {
+        "Uber Eats": {
+          "app_orders": 70,
+          "matched": 70,
+          "matched_after_discount": 55,
+          "app_sales": 2595.05,
+          "uber_payout_for_completed_orders": 1482.05,
+          "payout_breakdown_completed_orders": {
+            "sales_incl_tax": 2809.22,
+            "promotions_on_items": -887.1,
+            "uber_contribution_to_promotions": 204.92,
+            "marketplace_fee": -444.05,
+            "offer_redemption_fee": -54.45,
+            "tax_paid_by_uber_for_restaurant": -146.49,
+            "payout": 1482.05
+          },
+          "fee_rates_charged": {
+            "24%": 47,
+            "10%": 5,
+            "21%": 18
+          },
+          "other_rows_same_week": {
+            "ad_spend": -189.31,
+            "refunds_and_disputes": -4.24
+          },
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "explained_not_flagged": [
+        {
+          "app": "Uber Eats",
+          "order_date": "2026-11-08",
+          "order_id": "223D5",
+          "app_amount": 6.14,
+          "note": "Marked cancelled by Uber Eats but still paid $4.67; voided in the POS",
+          "reason": "explained"
+        }
+      ],
+      "not_counted": {
+        "ubereats_refund_rows": 2,
+        "ubereats_ad_spend_rows": 10
+      }
+    },
+    {
+      "week_start": "2026-11-09",
+      "week_end": "2026-11-15",
+      "apps_checked": [
+        "Uber Eats"
+      ],
+      "apps_not_checked": {
+        "DoorDash": {
+          "reason": "No report received for this week",
+          "pos_orders": 43,
+          "pos_sales": 1286.49
+        },
+        "Grubhub": {
+          "reason": "No report received for this week",
+          "pos_orders": 3,
+          "pos_sales": 90.0
+        }
+      },
+      "by_app": {
+        "Uber Eats": {
+          "app_orders": 80,
+          "matched": 80,
+          "matched_after_discount": 74,
+          "app_sales": 3354.99,
+          "uber_payout_for_completed_orders": 1868.26,
+          "payout_breakdown_completed_orders": {
+            "sales_incl_tax": 3631.92,
+            "promotions_on_items": -1288.67,
+            "uber_contribution_to_promotions": 297.64,
+            "marketplace_fee": -520.82,
+            "offer_redemption_fee": -73.26,
+            "tax_paid_by_uber_for_restaurant": -178.55,
+            "payout": 1868.26
+          },
+          "fee_rates_charged": {
+            "24%": 47,
+            "21%": 20,
+            "10%": 13
+          },
+          "other_rows_same_week": {
+            "ad_spend": -182.07,
+            "refunds_and_disputes": -48.55
+          },
+          "issues": {}
+        }
+      },
+      "issues": [],
+      "explained_not_flagged": [
+        {
+          "app": "Uber Eats",
+          "order_date": "2026-11-10",
+          "order_id": "BB5DC",
+          "app_amount": 39.5,
+          "note": "Marked cancelled by Uber Eats but still paid $31.20; voided in the POS",
+          "reason": "explained"
+        }
+      ],
+      "not_counted": {
+        "ubereats_refund_rows": 2,
+        "ubereats_ad_spend_rows": 7
+      }
+    }
+  ]
+}

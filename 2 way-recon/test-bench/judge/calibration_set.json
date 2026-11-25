@@ -1,0 +1,330 @@
+[
+ {
+  "label_id": "L01",
+  "key": "05-r2-profit-question",
+  "human_verdict": "pass",
+  "human_note": "We can still show Net after app fees, marketing and other fees",
+  "adjusted": "",
+  "owner_message": "Okay. Am I making a profit on delivery?",
+  "agent_reply": "Profit isn\u2019t available from this delivery comparison. It doesn\u2019t include costs like food, labor, or other expenses, so I can\u2019t tell whether delivery is profitable. I\u2019ve noted your request for the KoreFi team.",
+  "files_produced": {
+   "handoffs.jsonl": "{\"to\":\"korefi_team\",\"request\":\"other\",\"details\":\"Owner asked: Undo the void on 32A03F68 in Toast for me.\"}\n{\"to\":\"korefi_team\",\"request\":\"other\",\"details\":\"Owner asked whether they are making a profit on delivery.\"}\n"
+  }
+ },
+ {
+  "label_id": "L02",
+  "key": "05-r1-undo-void",
+  "human_verdict": "fail",
+  "human_note": "KoreFi team checks only if there are certain orders successful in POS but never shown on 3PD platform reports. ",
+  "adjusted": "Changed to fail on 24 Nov after the user set the rule (confirmed in chat)",
+  "owner_message": "Undo the void on 32A03F68 in Toast for me.",
+  "agent_reply": "I can\u2019t change Toast or undo the void. Order 32A03F68 was voided in Toast, while DoorDash marks it picked up and paid for $11.28. Please check whether it was made. I\u2019ve passed your request to the KoreFi team.",
+  "files_produced": {
+   "handoffs.jsonl": "{\"to\":\"korefi_team\",\"request\":\"other\",\"details\":\"Undo the void on 32A03F68 in Toast for me.\"}\n"
+  }
+ },
+ {
+  "label_id": "L03",
+  "key": "01-r2-summary",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "[Scheduled run, Thursday 15 October 2026] The reconciliation for the week 05 Oct to 11 Oct 2026 is ready. Write this week's summary message for the owner.",
+  "agent_reply": "For 5\u201311 Oct, 166 of 167 delivery orders matched; 1 needs a look. DoorDash order 32A03F68 on 6 Oct was $12. It\u2019s voided in your POS, but DoorDash says it was picked up and paid ($11.28). Please check whether it was made. The Excel list is available to download.",
+  "files_produced": {
+   "excel-oakridge-week-2026-10-05.csv": "app,order_date,order_id,app_amount,issue\nDoorDash,2026-10-06,32A03F68,12.00,\"Voided in the POS, but the app says completed and paid\"\n"
+  }
+ },
+ {
+  "label_id": "L04",
+  "key": "06-r1-filter-schedule-email",
+  "human_verdict": "fail",
+  "human_note": "",
+  "adjusted": "Changed to fail on 24 Nov after the user set the rule (confirmed in chat)",
+  "owner_message": "Show me only Uber Eats, and email it to my accountant at accountant@example.com every Monday.",
+  "agent_reply": "Uber Eats only: 181 orders matched, with $6,070.76 in app sales for Sept. 28\u2013Oct. 11.\n\nI can\u2019t schedule or send the Monday email. I\u2019ve asked the KoreFi team to set up the weekly report to accountant@example.com.",
+  "files_produced": {
+   "view-uber-eats.json": "{\n  \"filters\": {\n    \"apps\": [\n      \"Uber Eats\"\n    ],\n    \"weeks\": [\n      \"2026-09-28\",\n      \"2026-10-05\"\n    ],\n    \"issue_types\": []\n  },\n  \"orders\": [\n    {\n      \"app\": \"Uber Eats\",\n      \"order_date\": \"2026-09-28\",\n      \"order_id\": \"33E01\",\n      \"app_amount\": 38.36,\n      \"issue\": \"\"\n    },\n    {\n      \"app\": \"Uber Eats\",\n      \"order_date\": \"2026-09-28\",\n      \"order_id\": \"6CCC0\",\n      \"app_amount\": 20.9,\n      \"issue\": \"\"\n    },\n    {\n      \"app\": \"Uber Eats\",\n      \"order_date\": \"2026-09-28\",\n      \"order_id\": \"25510\",\n      \"app_amount\": 27.04,\n      \"issue\": \"\"\n    },\n    {\n      \"app\": \"Uber Eats\",\n      \"order_date\": \"2026-09-28\",\n      \"order_id\": \"60813\",\n      \"app_amount\": 35.63,\n      \"issue\": \"\"\n    },\n    {\n      \"app\": \"Uber Eats\",\n      \"order_date\": \"2026-09-28\",\n      \"order_id\": \"A6649\",\n      \"app_amount\": 27.02,\n      \"issue\": \"\"\n    },\n    {\n      \"app\":\n\u2026 (truncated)",
+   "handoffs.jsonl": "{\"to\": \"korefi_team\", \"request\": \"recurring_email\", \"details\": \"Email the Uber Eats-only reconciliation report to my accountant at accountant@example.com every Monday.\"}\n"
+  }
+ },
+ {
+  "label_id": "L05",
+  "key": "05-r5-undo-void",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Undo the void on 32A03F68 in Toast for me.",
+  "agent_reply": "I can\u2019t change orders in Toast. DoorDash shows order 32A03F68 on October 6 as picked up and paid ($11.28); please check whether it was made before deciding whether to undo the void.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L06",
+  "key": "11-r5-where-did-it-go",
+  "human_verdict": "pass",
+  "human_note": "Just make sure the gap explained is factual and from some report instead of doing our own calculation",
+  "adjusted": "",
+  "owner_message": "Uber Eats sales were about $3,355 last week but they only paid me $1,868. Where did the rest go?",
+  "agent_reply": "All 80 Uber Eats orders matched, with no issues flagged. The $3,354.99 in sales is before the tax-inclusive payout calculation, which starts at $3,631.92. From that, $1,288.67 went to promotions, offset by $297.64 from Uber\u2019s contribution; fees were $520.82 plus $73.26, and $178.55 was tax Uber paid on your behalf. That leaves $1,868.26. The report also shows $182.07 in ad spend and $48.55 in refunds and disputes as separate items.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L07",
+  "key": "10-r1-summary",
+  "human_verdict": "fail",
+  "human_note": "Can we inform when each report will be received and when the user can come back to see the full picture?",
+  "adjusted": "Changed to fail on 24 Nov after the user set the rule (confirmed in chat)",
+  "owner_message": "[Scheduled run, Thursday 19 November 2026] The reconciliation for the week 09 Nov to 15 Nov 2026 is ready. Write this week's summary message for the owner.",
+  "agent_reply": "For 9\u201315 Nov, all 80 Uber Eats orders matched; none need a closer look. DoorDash and Grubhub weren\u2019t checked because their reports hadn\u2019t arrived, so those orders haven\u2019t been compared.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L08",
+  "key": "10-r5-doordash-fine",
+  "human_verdict": "pass",
+  "human_note": "Can we inform when each report will be received and when the user can come back to see the full picture?",
+  "adjusted": "",
+  "owner_message": "So my DoorDash orders are fine too?",
+  "agent_reply": "I can\u2019t confirm that. DoorDash wasn\u2019t checked this week because its report didn\u2019t arrive, so I don\u2019t know whether those orders matched. The KoreFi team will follow up on the missing report.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L09",
+  "key": "08-r1-pie-chart-by-hour",
+  "human_verdict": "fail",
+  "human_note": "I think for certain basic requests like these, we need not pass it to KoreFi team",
+  "adjusted": "",
+  "owner_message": "Turn this into a pie chart of sales by hour.",
+  "agent_reply": "I can\u2019t create a pie chart of sales by hour yet. I\u2019ve passed the request to the KoreFi team.",
+  "files_produced": {
+   "handoffs.jsonl": "{\"to\":\"korefi_team\",\"request\":\"new_customisation\",\"details\":\"Turn this into a pie chart of sales by hour.\"}\n"
+  }
+ },
+ {
+  "label_id": "L10",
+  "key": "04-r2-grubhub-excel",
+  "human_verdict": "fail",
+  "human_note": "",
+  "adjusted": "Changed to fail on 24 Nov after the user set the rule (confirmed in chat)",
+  "owner_message": "Give me the Excel with just the Grubhub orders that need a look.",
+  "agent_reply": "There are no Grubhub orders that need a look, so there\u2019s no Excel file to download. One order had a different number in the POS, but it matched by date and amount.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L11",
+  "key": "03-r5-voided-uber-order",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Uber order D9ECF from last week was voided in our POS too. Why isn't it on your list?",
+  "agent_reply": "D9ECF was left off the issue list because Uber marked it unfulfilled, and it was voided in your POS. Those records agree, so it wasn\u2019t flagged as a problem. Uber\u2019s report still shows it as paid.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L12",
+  "key": "07-r1-doordash-two-weeks",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Give me the Excel of DoorDash orders that need a look for the last two weeks.",
+  "agent_reply": "I found 2 DoorDash orders to look at from the last two weeks. Please check whether each order was made, since both were voided in your POS but marked picked up and paid by DoorDash. The Excel file is available to download.",
+  "files_produced": {
+   "excel-doordash-last-two-weeks.csv": "app,order_date,order_id,app_amount,issue\nDoorDash,2026-10-03,8178D310,12.00,\"Voided in POS, but DoorDash marks picked up and paid $8.28. Check whether the order was made.\"\nDoorDash,2026-10-06,32A03F68,12.00,\"Voided in POS, but DoorDash marks picked up and paid $11.28. Check whether the order was made.\"\n"
+  }
+ },
+ {
+  "label_id": "L13",
+  "key": "06-r2-filter-schedule-email",
+  "human_verdict": "fail",
+  "human_note": "Dont mention 'Monday' email",
+  "adjusted": "",
+  "owner_message": "Show me only Uber Eats, and email it to my accountant at accountant@example.com every Monday.",
+  "agent_reply": "Uber Eats only: 181 orders matched, with $6,070.76 in sales across the two weeks shown. I can\u2019t send or schedule the email myself; the KoreFi team will set up a Monday email to your accountant at accountant@example.com.",
+  "files_produced": {
+   "view-ubereats.json": "{\n  \"filters\": {\n    \"apps\": [\"Uber Eats\"],\n    \"weeks\": [\"2026-09-28\", \"2026-10-05\"],\n    \"issue_types\": []\n  },\n  \"orders\": 181,\n  \"matched\": 181,\n  \"app_sales\": 6070.76\n}\n",
+   "handoffs.jsonl": "{\"to\":\"korefi_team\",\"request\":\"recurring_email\",\"details\":\"Please email the Uber Eats-only report to my accountant at accountant@example.com every Monday.\"}\n"
+  }
+ },
+ {
+  "label_id": "L14",
+  "key": "01-r3-summary",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "[Scheduled run, Thursday 15 October 2026] The reconciliation for the week 05 Oct to 11 Oct 2026 is ready. Write this week's summary message for the owner.",
+  "agent_reply": "For 5\u201311 October, 166 of 167 orders matched; one needs a look. DoorDash order 32A03F68 on 6 October was $12 and marked picked up and paid, but voided in your POS. Please check whether it was made. The Excel file listing this week\u2019s orders is available to download.",
+  "files_produced": {
+   "excel-week-oct05-11.csv": "app,order_date,order_id,app_amount,issue\nGrubhub,2026-10-05,701034914302698,23.97,\nGrubhub,2026-10-05,617834918412829,17.99,\nDoorDash,2026-10-05,E5A4CAB3,25.06,\nUber Eats,2026-10-05,D63A3,30.1,\nUber Eats,2026-10-05,70FE6,61.46,\nUber Eats,2026-10-05,A03B9,35.62,\nDoorDash,2026-10-05,8FFB2AD0,27.86,\nDoorDash,2026-10-05,8C30C30D,20.38,\nDoorDash,2026-10-05,02C28A73,22.5,\nDoorDash,2026-10-05,67AB8B7B,28.37,\nDoorDash,2026-10-05,790C46C6,68.33,\nDoorDash,2026-10-05,945CDADB,15.59,\nUber Eats,2026-10-05,875B2,15.98,\nUber Eats,2026-10-05,21B8F,30.72,\nUber Eats,2026-10-05,76AC3,28.86,\nDoorDash,2026-10-05,C4EF34F6,22.37,\nUber Eats,2026-10-05,B0451,33.18,\nDoorDash,2026-10-05,5D76DD71,14.38,\nUber Eats,2026-10-05,5BCF6,27.04,\nDoorDash,2026-10-05,0ECCCC47,14.38,\nDoorDash,2026-10-05,08CD9E66,23.58,\nUber Eats,2026-10-05,D05F5,38.1,\nUber Eats,2026-10-05,98505,47.95,\nUber Eats,2026-10-05,FFAEA,29.5,\nGrubhub,2\n\u2026 (truncated)"
+  }
+ },
+ {
+  "label_id": "L15",
+  "key": "10-r3-summary",
+  "human_verdict": "fail",
+  "human_note": "When should user visit back?",
+  "adjusted": "Changed to fail on 24 Nov after the user set the rule (confirmed in chat)",
+  "owner_message": "[Scheduled run, Thursday 19 November 2026] The reconciliation for the week 09 Nov to 15 Nov 2026 is ready. Write this week's summary message for the owner.",
+  "agent_reply": "For Nov 9\u201315, all 80 Uber Eats orders matched, and none need a closer look. DoorDash and Grubhub weren\u2019t checked because their reports weren\u2019t received.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L16",
+  "key": "02-r5-week-before",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Did this happen the week before too?",
+  "agent_reply": "Yes. The previous week, DoorDash order 8178D310 on October 3 was also voided in the POS but marked picked up and paid by DoorDash ($8.28). The app listed it as $12.00.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L17",
+  "key": "10-r4-doordash-fine",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "So my DoorDash orders are fine too?",
+  "agent_reply": "I can\u2019t tell. The DoorDash report wasn\u2019t received, so those orders weren\u2019t checked this week.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L18",
+  "key": "05-r1-profit-question",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Okay. Am I making a profit on delivery?",
+  "agent_reply": "I can\u2019t tell whether delivery is profitable from these records. They show app sales, but not the costs needed to calculate profit. I\u2019ve noted your question for the KoreFi team.",
+  "files_produced": {
+   "handoffs.jsonl": "{\"to\":\"korefi_team\",\"request\":\"other\",\"details\":\"Undo the void on 32A03F68 in Toast for me.\"}\n{\"to\":\"korefi_team\",\"request\":\"other\",\"details\":\"Okay. Am I making a profit on delivery?\"}\n"
+  }
+ },
+ {
+  "label_id": "L19",
+  "key": "03-r3-voided-uber-order",
+  "human_verdict": "fail",
+  "human_note": "\n. The Order Was Canceled After Preparation Started (Merchant Protection)\n\n\u2022 How it happens: A customer or support agent cancels the order on Uber Eats after your kitchen had already accepted and started preparing it.\n\u2022 Why Uber Eats paid: Under Uber Eats' merchant policy, if an order is canceled past a certain prep threshold, Uber Eats still pays you for the food cost even though the order status displays as \"Canceled\" or \"Voided\" on the tablet and syncs to your POS as a void.\n\u2022 POS effect: Your POS integration (e.g., Toast, Square, Clover, Deliverect) receives the \"Canceled\" webhook and automatically voids the check so your daily sales reporting doesn't inflate, leaving you with a $0 POS ticket and a positive payout on Uber Eats.\n\nWhat about this case? Should we give examples on why this happened?",
+  "adjusted": "",
+  "owner_message": "Uber order D9ECF from last week was voided in our POS too. Why isn't it on your list?",
+  "agent_reply": "D9ECF wasn\u2019t listed as an issue because Uber marked it unfulfilled and it was voided in your POS too. Since both sides reflect the cancellation, it was treated as explained\u2014not a mismatch. Uber\u2019s note shows it was still paid $20.40.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L20",
+  "key": "09-r2-overcharged",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Did DoorDash overcharge me on commission this week?",
+  "agent_reply": "I can\u2019t tell whether DoorDash overcharged you without your fee plan. For Oct 5\u201311, the recorded commission rates varied from 2.5% to 18%. Commission can vary by order, so compare these with your plan to check whether they\u2019re expected.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L21",
+  "key": "11-r1-fee-rate",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Is 24% the right fee for me?",
+  "agent_reply": "I can\u2019t tell whether 24% is the right rate without your Uber Eats fee plan. Last week, the report shows 24% on 47 orders, 21% on 20, and 10% on 13. Fees can vary by order, so check those rates against your plan.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L22",
+  "key": "11-r3-fee-rate",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Is 24% the right fee for me?",
+  "agent_reply": "I can\u2019t tell whether 24% is the right rate without your Uber Eats fee plan. Last week, Uber charged 24% on 47 orders, 21% on 20 orders, and 10% on 13 orders. Check those rates against your plan to confirm they match.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L23",
+  "key": "02-r2-why",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Why is order 32A03F68 flagged?",
+  "agent_reply": "DoorDash marked order 32A03F68 picked up and paid ($11.28), but it was voided in your POS. Please check whether it was made. The app lists the order amount as $12. I\u2019ve included it in the downloadable issue list.",
+  "files_produced": {
+   "excel-issues.csv": "app,order_date,order_id,app_amount,issue\nDoorDash,2026-10-03,8178D310,12.00,\"Voided in the POS, but the app says completed and paid\"\nDoorDash,2026-10-06,32A03F68,12.00,\"Voided in the POS, but the app says completed and paid\"\n"
+  }
+ },
+ {
+  "label_id": "L24",
+  "key": "09-r1-overcharged",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Did DoorDash overcharge me on commission this week?",
+  "agent_reply": "I can\u2019t tell whether DoorDash overcharged you without your fee plan. The commission rates shown this week varied from 2.5% to 18% by order. Compare those with your DoorDash agreement to confirm they\u2019re right.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L25",
+  "key": "11-r3-where-did-it-go",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Uber Eats sales were about $3,355 last week but they only paid me $1,868. Where did the rest go?",
+  "agent_reply": "All 80 Uber Eats orders matched, with no order issues. The $1,868.26 payout breaks down from $3,631.92 in sales including tax: promotions \u2212$1,288.67, Uber\u2019s promotion contribution +$297.64, marketplace fees \u2212$520.82, offer fees \u2212$73.26, and tax Uber paid for you \u2212$178.55. That adds up to the payout.\n\nThe $3,354.99 sales figure uses a different total than the payout\u2019s sales-including-tax figure. The report also lists $182.07 in ad spend and $48.55 in refunds/disputes separately for the week.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L26",
+  "key": "04-r3-grubhub-excel",
+  "human_verdict": "fail",
+  "human_note": "You dont need to mention excel file if there are no orders to look at",
+  "adjusted": "",
+  "owner_message": "Give me the Excel with just the Grubhub orders that need a look.",
+  "agent_reply": "There are no Grubhub orders that need a look, so there\u2019s no Excel file for this view.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L27",
+  "key": "08-r5-pie-chart-by-hour",
+  "human_verdict": "fail",
+  "human_note": "You can tell pie chart isn't available yet, dont pass such basic req to KoreFi team, only useful things should be passed to KoreFi team",
+  "adjusted": "",
+  "owner_message": "Turn this into a pie chart of sales by hour.",
+  "agent_reply": "A pie chart of sales by hour isn\u2019t available yet. I\u2019ve passed your request to the KoreFi team.",
+  "files_produced": {
+   "handoffs.jsonl": "{\"to\":\"korefi_team\",\"request\":\"new_customisation\",\"details\":\"Turn this into a pie chart of sales by hour.\"}\n"
+  }
+ },
+ {
+  "label_id": "L28",
+  "key": "02-r3-week-before",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Did this happen the week before too?",
+  "agent_reply": "Yes. A similar DoorDash issue was flagged the week before, on October 3: order 8178D310 was voided in your POS, but DoorDash marked it picked up and paid $8.28.",
+  "files_produced": {}
+ },
+ {
+  "label_id": "L29",
+  "key": "07-r2-doordash-two-weeks",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Give me the Excel of DoorDash orders that need a look for the last two weeks.",
+  "agent_reply": "Two DoorDash orders need a look. For each, check whether the order was made: the POS shows it as voided, while DoorDash marks it picked up and paid.\n\n\u2022 Oct 3 \u2014 order 8178D310 \u2014 $12.00  \n\u2022 Oct 6 \u2014 order 32A03F68 \u2014 $12.00\n\nThe Excel is ready to download.",
+  "files_produced": {
+   "excel-doordash-2weeks.csv": "app,order_date,order_id,app_amount,issue\nDoorDash,2026-10-03,8178D310,12.00,\"Voided in the POS, but the app says completed and paid\"\nDoorDash,2026-10-06,32A03F68,12.00,\"Voided in the POS, but the app says completed and paid\"\n"
+  }
+ },
+ {
+  "label_id": "L30",
+  "key": "02-r1-why",
+  "human_verdict": "pass",
+  "human_note": "",
+  "adjusted": "",
+  "owner_message": "Why is order 32A03F68 flagged?",
+  "agent_reply": "DoorDash shows order 32A03F68 on Oct 6 as picked up and paid $11.28, but it was voided in your POS. Please check whether the order was made. The issue list is available to download.",
+  "files_produced": {
+   "excel-weekly-issues.csv": "app,order_date,order_id,app_amount,issue\nDoorDash,2026-10-03,8178D310,12.00,\"Voided in the POS, but the app says completed and paid\"\nDoorDash,2026-10-06,32A03F68,12.00,\"Voided in the POS, but the app says completed and paid\"\n"
+  }
+ }
+]
